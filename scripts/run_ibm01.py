@@ -14,6 +14,7 @@ from placers.local_search import optimize
 CHAL = "/home/laz/partcl/macro-place-challenge-2026"
 name = sys.argv[1] if len(sys.argv) > 1 else "ibm01"
 iters = int(sys.argv[2]) if len(sys.argv) > 2 else 1500
+T0 = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0  # greedy descent wins
 
 bench, plc = load_benchmark_from_dir(f"{CHAL}/external/MacroPlacement/Testcases/ICCAD04/{name}")
 fe = FastEval(bench, plc)
@@ -34,7 +35,8 @@ print(f"start fast_eval proxy = {fe.wirelength_cost(legal)+0.5*fe.density_cost(l
 print(f"--- local search ({iters} iters) ---")
 
 t0 = time.time()
-best, hist = optimize(fe, legal, iters=iters, seed=1, T0=0.004)
+best, hist = optimize(fe, legal, iters=iters, seed=1, T0=T0,
+                      jump_frac=0.3, jitter_sigma=1.0)
 dt = time.time() - t0
 
 t_opt, ov_opt = tilos(best)

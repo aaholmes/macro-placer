@@ -60,15 +60,20 @@ def optimize(fe, pos0, iters=1500, seed=0, jump_frac=0.5, jitter_sigma=1.5,
 
     pos = np.asarray(pos0, np.float64).copy()
 
-    def proxy(p):
-        return fe.wirelength_cost(p) + 0.5 * fe.density_cost(p) + 0.5 * fe.congestion_cost(p)
+    def components(p):
+        wl = fe.wirelength_cost(p); d = fe.density_cost(p); c = fe.congestion_cost(p)
+        return wl, d, c, wl + 0.5 * d + 0.5 * c
 
-    cur = proxy(pos)
+    cwl, cd, cc, cur = components(pos)
     best = cur; best_pos = pos.copy()
     hist = [(0, best)]
+    comp_hist = [(0, cwl, 0.5 * cd, 0.5 * cc)]  # weighted contributions of `cur`
     hot = _hot_macros(fe, pos, nm)
     evals = 0
     accepts = 0
+    # diagnosis counters
+    stat = dict(hard_prop=0, hard_rej_overlap=0, hard_rej_cost=0, hard_accept=0,
+                soft_prop=0, soft_rej_cost=0, soft_accept=0)
 
     for it in range(iters):
         # refresh hotspots occasionally (placement drifts as it spreads)
@@ -81,6 +86,7 @@ def optimize(fe, pos0, iters=1500, seed=0, jump_frac=0.5, jitter_sigma=1.5,
         else:
             i = int(rng.integers(nm))
         is_hard = i < nh
+        stat["hard_prop" if is_hard else "soft_prop"] += 1
 
         # propose a target. Random full jumps only for hard macros (into empty
         # space); soft macros only jitter locally (random soft jumps are noise).
@@ -93,27 +99,33 @@ def optimize(fe, pos0, iters=1500, seed=0, jump_frac=0.5, jitter_sigma=1.5,
 
         # hard macros must stay overlap-free; soft macros may overlap freely
         if is_hard and _overlaps(pos, i, (x, y), hw, hh, nh, gap):
+            stat["hard_rej_overlap"] += 1
             continue  # keep placement legal; no expensive eval wasted
 
         old = pos[i].copy()
         pos[i, 0] = x; pos[i, 1] = y
-        cand = proxy(pos)
+        wl, d, c, cand = components(pos)
         evals += 1
         delta = cand - cur
         T = T0 * (Tend / T0) ** (it / iters) if T0 > 0 else 0.0  # geometric cooling
         accept = delta < 0 or (T > 0 and rng.random() < np.exp(-delta / T))
         if accept:
-            cur = cand; accepts += 1
+            cur = cand; cwl, cd, cc = wl, d, c; accepts += 1
+            stat["hard_accept" if is_hard else "soft_accept"] += 1
             if cur < best:
                 best = cur; best_pos = pos.copy()
         else:
             pos[i] = old  # revert
+            stat["hard_rej_cost" if is_hard else "soft_rej_cost"] += 1
 
         if evals and evals % log_every == 0:
             hist.append((evals, best))
+            comp_hist.append((evals, cwl, 0.5 * cd, 0.5 * cc))
             logf(f"  it={it:5d} evals={evals:5d} accepts={accepts:5d} "
                  f"cur={cur:.4f} best={best:.4f}")
 
     hist.append((evals, best))
+    comp_hist.append((evals, cwl, 0.5 * cd, 0.5 * cc))
     logf(f"  done: {evals} evals, {accepts} accepts, best={best:.4f}")
-    return best_pos, hist
+    info = dict(stat=stat, comp_hist=comp_hist)
+    return best_pos, hist, info

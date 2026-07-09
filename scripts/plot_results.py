@@ -29,11 +29,12 @@ base = bench.macro_positions.numpy().astype(np.float64)
 legal, _, _ = legalize(base, sz, nh, bench.canvas_width, bench.canvas_height, gap=0.01)
 
 # capture full trajectory (log_every=1, silent)
-best, hist = optimize(fe, legal, iters=2500, seed=1, T0=0.0,
-                      jump_frac=0.3, jitter_sigma=1.0, log_every=1, logf=lambda *a: None)
+best, hist, info = optimize(fe, legal, iters=2500, seed=1, T0=0.0,
+                            jump_frac=0.3, jitter_sigma=1.0, log_every=1, logf=lambda *a: None)
 np.save(f"{NOTES}/{name}_opt.npy", best)
 evals = np.array([h[0] for h in hist]); scores = np.array([h[1] for h in hist])
 print(f"final best fast_eval = {scores[-1]:.4f}  ({len(evals)} points)")
+print("move stats:", info["stat"])
 
 # ---------- Figure 1: before / after placement ----------
 def draw(ax, pos, title):
@@ -75,3 +76,22 @@ ax.legend(loc="upper right", fontsize=9)
 ax.grid(alpha=0.25)
 fig2.tight_layout(); fig2.savefig(f"{NOTES}/{name}_convergence.png", dpi=100)
 print(f"saved {name}_convergence.png")
+
+# ---------- Figure 3: weighted component contributions over training ----------
+ch = np.array(info["comp_hist"])  # cols: eval, wl*1, dens*0.5, cong*0.5
+ce, wl, dh, cgh = ch[:, 0], ch[:, 1], ch[:, 2], ch[:, 3]
+fig3, ax3 = plt.subplots(figsize=(10, 6))
+ax3.stackplot(ce, cgh, dh, wl,
+              labels=["0.5 x congestion", "0.5 x density", "1.0 x wirelength"],
+              colors=["#d97706", "#2563eb", "#16a34a"], alpha=0.85)
+ax3.plot(ce, wl + dh + cgh, color="black", lw=1.5, label="total proxy")
+ax3.set_xlabel("cost evaluations")
+ax3.set_ylabel("weighted contribution to proxy cost")
+ax3.set_title(f"{name}: how each weighted term evolves (stacked = total proxy)")
+ax3.legend(loc="center right", fontsize=9)
+ax3.grid(alpha=0.2)
+fig3.tight_layout(); fig3.savefig(f"{NOTES}/{name}_components.png", dpi=100)
+print(f"saved {name}_components.png")
+# print start/end breakdown
+print(f"start  wl={wl[0]:.4f} dens={dh[0]:.4f} cong={cgh[0]:.4f} total={wl[0]+dh[0]+cgh[0]:.4f}")
+print(f"end    wl={wl[-1]:.4f} dens={dh[-1]:.4f} cong={cgh[-1]:.4f} total={wl[-1]+dh[-1]+cgh[-1]:.4f}")

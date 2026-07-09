@@ -35,8 +35,9 @@ print(f"start fast_eval proxy = {fe.wirelength_cost(legal)+0.5*fe.density_cost(l
 print(f"--- local search ({iters} iters) ---")
 
 t0 = time.time()
-best, hist = optimize(fe, legal, iters=iters, seed=1, T0=T0,
-                      jump_frac=0.3, jitter_sigma=1.0)
+best, hist, info = optimize(fe, legal, iters=iters, seed=1, T0=T0,
+                            jump_frac=0.3, jitter_sigma=1.0)
+print("move stats:", info["stat"])
 dt = time.time() - t0
 
 t_opt, ov_opt = tilos(best)

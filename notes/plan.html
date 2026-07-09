@@ -1,0 +1,110 @@
+<title>Macro Placer — Build Plan</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #666; --line: #e2e2e2;
+    --accent: #2563eb; --done: #16a34a; --now: #d97706; --card: #f7f8fa;
+    --code: #f0f2f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#15171a; --fg:#e6e8ea; --muted:#9aa0a6; --line:#2c2f34;
+      --accent:#60a5fa; --done:#4ade80; --now:#fbbf24; --card:#1d2024; --code:#22262b; }
+  }
+  :root[data-theme="dark"] { --bg:#15171a; --fg:#e6e8ea; --muted:#9aa0a6; --line:#2c2f34;
+    --accent:#60a5fa; --done:#4ade80; --now:#fbbf24; --card:#1d2024; --code:#22262b; }
+  :root[data-theme="light"] { --bg:#fff; --fg:#1a1a1a; --muted:#666; --line:#e2e2e2;
+    --accent:#2563eb; --done:#16a34a; --now:#d97706; --card:#f7f8fa; --code:#f0f2f5; }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); margin: 0;
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 32px; }
+  h2 { font-size: 1.15rem; margin: 40px 0 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--line); }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px;
+    font: 0.86em ui-monospace, "SF Mono", Menlo, monospace; }
+  .goal { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 20px; margin: 20px 0; }
+  .goal b { color: var(--accent); }
+  ol.tasks { list-style: none; padding: 0; margin: 0; counter-reset: t; }
+  li.task { position: relative; background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px 20px 16px 58px; margin: 12px 0; }
+  li.task::before { counter-increment: t; content: counter(t);
+    position: absolute; left: 16px; top: 16px; width: 26px; height: 26px;
+    border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700;
+    font-size: 0.9rem; display: grid; place-items: center; }
+  li.task .title { font-weight: 650; }
+  li.task .pill { font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px; margin-left: 8px;
+    vertical-align: middle; }
+  .pill.now { background: color-mix(in srgb, var(--now) 20%, transparent); color: var(--now); }
+  .pill.next { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+  .pill.par { background: color-mix(in srgb, var(--muted) 20%, transparent); color: var(--muted); }
+  li.task.doing::before { background: var(--now); }
+  .why { color: var(--muted); font-size: 0.92rem; margin: 6px 0 0; }
+  .terms { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0 0; }
+  .term { flex: 1; min-width: 150px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px 14px; }
+  .term .n { font-size: 1.4rem; font-weight: 700; }
+  .term .l { color: var(--muted); font-size: 0.85rem; }
+  .bar { height: 6px; border-radius: 3px; margin-top: 6px; background: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  .ok { color: var(--done); font-weight: 600; }
+  .warn { color: var(--now); font-weight: 600; }
+</style>
+<div class="wrap">
+  <h1>Macro Placement Challenge — Build Plan</h1>
+  <p class="sub">Private working repo · fast evaluator → local-search optimizer · target proxy toward the ~0.95 frontier</p>
+
+  <div class="goal">
+    <b>Objective.</b> Minimize proxy cost = <code>1.0·wirelength + 0.5·density + 0.5·congestion</code>,
+    zero hard-macro overlaps, &lt;1 h/benchmark. RePlAce baseline <b>1.4578</b>; competitive frontier ~<b>0.95</b>.
+    Our legalized reference already sits at ~<b>1.455</b>.
+  </div>
+
+  <h2>Where the cost is (ibm01, initial config)</h2>
+  <div class="terms">
+    <div class="term"><div class="n">6%</div><div class="l">Wirelength (0.064)</div>
+      <div class="bar" style="width:6%"></div></div>
+    <div class="term"><div class="n">39%</div><div class="l">Density (0.406 wtd)</div>
+      <div class="bar" style="width:39%"></div></div>
+    <div class="term"><div class="n" style="color:var(--now)">55%</div><div class="l">Congestion (0.569 wtd)</div>
+      <div class="bar" style="width:55%;background:var(--now)"></div></div>
+  </div>
+  <p class="why">Congestion + density = 94% of cost and both want spreading; wirelength is nearly free and wants
+    clustering. <b>Attack congestion first.</b></p>
+
+  <h2>Status so far</h2>
+  <table>
+    <tr><th>Component</th><th>Accuracy vs TILOS</th><th>Speed</th><th>State</th></tr>
+    <tr><td>Wirelength</td><td>6e-10 rel err</td><td>0.155 ms (was 567)</td><td class="ok">exact</td></tr>
+    <tr><td>Density</td><td>3.7e-8 rel err</td><td>~14 ms full rebuild</td><td class="ok">exact</td></tr>
+    <tr><td>Congestion</td><td>4.3e-4 rel err</td><td>37 ms (was 430)</td><td class="warn">~12-cell bias</td></tr>
+  </table>
+
+  <h2>Task queue</h2>
+  <ol class="tasks">
+    <li class="task doing"><span class="title">Perturbation correctness check on ibm01</span>
+      <span class="pill now">in progress</span>
+      <p class="why">Verify fast_eval matches TILOS on <em>moved</em> configs (random perturbations,
+        near-overlaps, edge macros), not just the initial placement — the failure mode that would make the
+        optimizer chase phantom gains. Cheap; everything depends on it.</p></li>
+    <li class="task"><span class="title">End-to-end greedy/SA optimizer demo on ibm01</span>
+      <span class="pill next">next</span>
+      <p class="why">Full-recompute is already fast enough for thousands of moves. Propose moves biased to
+        high-congestion/high-density macros; <b>accept on the true proxy delta</b> (not density alone).
+        Legalize; verify the win with a ground-truth TILOS call.</p></li>
+    <li class="task"><span class="title">Full validation: 17 benchmarks × perturbations + regression test</span>
+      <span class="pill par">parallel</span>
+      <p class="why">Long background run establishing trust before scaling. Lock parity in as a regression test.</p></li>
+    <li class="task"><span class="title">Incremental single-move delta layer + fix congestion bias</span>
+      <p class="why">The real speedup: update only touched nets/cells (~50 ms → sub-ms/move) for
+        competitive-scale search. Fix the 12-cell macro-shadow mismatch while in this code.</p></li>
+    <li class="task"><span class="title">Fix legalizer displacement-damage &amp; convergence</span>
+      <span class="pill par">parallel</span>
+      <p class="why">Min-displacement legalization (anchor to original) so ibm08 stops blowing up (+0.38) and
+        ibm06 converges. Independent code — can proceed alongside.</p></li>
+  </ol>
+</div>

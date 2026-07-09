@@ -1,0 +1,9 @@
+[17:57:54] === overnight sweep start: 17 benches, iter_cap=500000, time_cap=35.0min, deadline=11.5h ===
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm01/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 45, Row: 41
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[17:57:55] ibm01: fresh start from legalized reference
+[17:58:17] ibm01: 20000 iters, fast=0.8603 tilos=0.8605 ov=0 (21s)

@@ -12,6 +12,8 @@ This file is validated component-by-component against the TILOS ground truth
 from __future__ import annotations
 import numpy as np
 
+_EMPTY = np.array([], dtype=np.int64)
+
 
 def _pin_position(plc, pin_idx):
     """Mirror plc.__get_pin_position: PORT = own pos; MACRO_PIN = ref pos + offset."""
@@ -385,3 +387,123 @@ class FastEval:
 
     def congestion_cost(self, pos):
         return self.build_congestion(np.asarray(pos, np.float64))
+
+    # ======================================================================
+    # INCREMENTAL single-move evaluation
+    # ======================================================================
+    # Keep per-net HPWL, the density grid, and the four congestion arrays as
+    # live state. A single-macro move updates only the nets/cells that macro
+    # touches; the final reductions (smooth + top-k) are recomputed (cheap).
+
+    def _build_wl_slices(self):
+        # pins are appended net-by-net in _build_wirelength_ir, so pin_net is
+        # non-decreasing -> each net's pins are a contiguous slice.
+        ids = np.arange(self.num_nets)
+        self.net_start = np.searchsorted(self.pin_net, ids, side="left")
+        self.net_end = np.searchsorted(self.pin_net, ids, side="right")
+
+    def _net_hpwl(self, j, pos):
+        s, e = self.net_start[j], self.net_end[j]
+        owner = self.pin_owner[s:e]; off = self.pin_off[s:e]
+        oc = np.clip(owner, 0, None)
+        x = np.where(owner >= 0, pos[oc, 0] + off[:, 0], off[:, 0])
+        y = np.where(owner >= 0, pos[oc, 1] + off[:, 1], off[:, 1])
+        return (x.max() - x.min()) + (y.max() - y.min())
+
+    def init_incremental(self, pos):
+        """Build all live state for incremental evaluation from scratch."""
+        if not hasattr(self, "cong_nets"):
+            self._build_congestion_ir()
+        self._build_wl_slices()
+        self.ipos = np.asarray(pos, np.float64).copy()
+        # wirelength: per-net hpwl + running weighted sum
+        self.wl_net = np.array([self._net_hpwl(j, self.ipos)
+                                for j in range(self.num_nets)])
+        self.wl_sum = float((self.net_weight * self.wl_net).sum())
+        # density grid + congestion arrays (full build)
+        self.build_density(self.ipos)          # -> grid_occupied, grid_area
+        self.build_congestion(self.ipos)       # -> Hraw, Vraw, Hmac, Vmac
+        self._macro_cong_arr = {k: np.array(sorted(v)) for k, v
+                                in self.macro_cong_nets.items()}
+        return self.cost_current()
+
+    def cost_current(self):
+        wl = self.wl_sum / ((self.W + self.H) * self.net_cnt)
+        dens = self.density_cost_from_occ(self.grid_occupied)
+        cong = self.congestion_cost_from_state()
+        return wl + 0.5 * dens + 0.5 * cong
+
+    def _add_macro_density(self, i, sign):
+        gc = self.plc.grid_col
+        sz = self.b.macro_sizes.numpy()
+        r = self._macro_cell_area(self.ipos[i, 0], self.ipos[i, 1], sz[i, 0], sz[i, 1])
+        if r is None:
+            return
+        rows, cols, area = r
+        idx = (rows[:, None] * gc + cols[None, :]).ravel()
+        self.grid_occupied[idx] += sign * area.ravel()
+
+    def _add_net_route(self, j, sign):
+        net = self.cong_nets[j]
+        gset, src = self._net_gcells(net, self.ipos)
+        self._route_net(gset, src, net["weight"], self.Hraw, self.Vraw, sign)
+
+    def _add_shadow(self, i, sign):
+        sz = self.b.macro_sizes.numpy()
+        self._macro_shadow(self.ipos[i, 0], self.ipos[i, 1], sz[i, 0], sz[i, 1],
+                           self.Hmac, self.Vmac, sign)
+
+    def apply_move(self, i, x, y):
+        """Move macro i to (x,y), updating all live state incrementally.
+        Returns an undo token for exact revert."""
+        nh = self.b.num_hard_macros
+        is_hard = i < nh
+        cong_nets = self._macro_cong_arr.get(i, _EMPTY)
+        wl_nets = self.macro_nets.get(i, _EMPTY)
+        undo = dict(i=i, old=self.ipos[i].copy(), wl_sum=self.wl_sum,
+                    wl_nets=wl_nets, wl_vals=self.wl_net[wl_nets].copy()
+                    if len(wl_nets) else None)
+        # --- remove old contributions (at current ipos[i]) ---
+        self._add_macro_density(i, -1.0)
+        for j in cong_nets:
+            self._add_net_route(int(j), -1.0)
+        if is_hard:
+            self._add_shadow(i, -1.0)
+        # --- move ---
+        self.ipos[i, 0] = x; self.ipos[i, 1] = y
+        # --- add new contributions ---
+        self._add_macro_density(i, +1.0)
+        for j in cong_nets:
+            self._add_net_route(int(j), +1.0)
+        if is_hard:
+            self._add_shadow(i, +1.0)
+        # --- wirelength: recompute affected nets ---
+        if len(wl_nets):
+            new = np.array([self._net_hpwl(int(j), self.ipos) for j in wl_nets])
+            self.wl_sum += float((self.net_weight[wl_nets] * (new - self.wl_net[wl_nets])).sum())
+            self.wl_net[wl_nets] = new
+        return undo
+
+    def undo_move(self, undo):
+        i = undo["i"]
+        # reverse the deposits by re-applying with the positions swapped
+        new = self.ipos[i].copy()
+        is_hard = i < self.b.num_hard_macros
+        cong_nets = self._macro_cong_arr.get(i, _EMPTY)
+        # remove current (new) contributions
+        self._add_macro_density(i, -1.0)
+        for j in cong_nets:
+            self._add_net_route(int(j), -1.0)
+        if is_hard:
+            self._add_shadow(i, -1.0)
+        # restore old position and re-add
+        self.ipos[i] = undo["old"]
+        self._add_macro_density(i, +1.0)
+        for j in cong_nets:
+            self._add_net_route(int(j), +1.0)
+        if is_hard:
+            self._add_shadow(i, +1.0)
+        # restore wirelength exactly
+        self.wl_sum = undo["wl_sum"]
+        if undo["wl_vals"] is not None:
+            self.wl_net[undo["wl_nets"]] = undo["wl_vals"]

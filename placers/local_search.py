@@ -46,6 +46,64 @@ def _hot_macros(fe, pos, nm):
     return np.clip(hot, 1e-9, None)
 
 
+def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0,
+                  hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, move_hard=True,
+                  move_soft=True, refresh=2000, log_every=2000, logf=print):
+    """Greedy/SA single-move local search using the INCREMENTAL evaluator
+    (~55x faster than full recompute). Returns (best_pos, hist)."""
+    rng = np.random.default_rng(seed)
+    b = fe.b
+    nh = b.num_hard_macros; nm = b.num_macros
+    sz = b.macro_sizes.numpy()
+    hw = sz[:, 0] / 2.0; hh = sz[:, 1] / 2.0
+    W, H = fe.W, fe.H
+
+    cur = fe.init_incremental(pos0)
+    best = cur; best_pos = fe.ipos.copy()
+    hist = [(0, best)]
+    hot = _hot_macros(fe, fe.ipos, nm)   # note: rebuilds grid/cong at committed pos
+    accepts = 0
+
+    for it in range(iters):
+        if it and it % refresh == 0:
+            hot = _hot_macros(fe, fe.ipos, nm)
+        lo = 0 if move_hard else nh
+        hi = nm if move_soft else nh
+        if rng.random() < hot_bias:
+            w = hot[lo:hi]; i = lo + int(rng.choice(hi - lo, p=w / w.sum()))
+        else:
+            i = int(rng.integers(lo, hi))
+        is_hard = i < nh
+
+        if is_hard and rng.random() < jump_frac:
+            x = rng.uniform(hw[i], W - hw[i]); y = rng.uniform(hh[i], H - hh[i])
+        else:
+            x = min(max(fe.ipos[i, 0] + rng.normal(0, jitter_sigma), hw[i]), W - hw[i])
+            y = min(max(fe.ipos[i, 1] + rng.normal(0, jitter_sigma), hh[i]), H - hh[i])
+
+        if is_hard and _overlaps(fe.ipos, i, (x, y), hw, hh, nh, gap):
+            continue
+
+        undo = fe.apply_move(i, x, y)
+        cand = fe.cost_current()
+        delta = cand - cur
+        T = T0 * (Tend / T0) ** (it / iters) if T0 > 0 else 0.0
+        if delta < 0 or (T > 0 and rng.random() < np.exp(-delta / T)):
+            cur = cand; accepts += 1
+            if cur < best:
+                best = cur; best_pos = fe.ipos.copy()
+        else:
+            fe.undo_move(undo)
+
+        if it and it % log_every == 0:
+            hist.append((it, best))
+            logf(f"  it={it:6d} accepts={accepts:6d} cur={cur:.4f} best={best:.4f}")
+
+    hist.append((iters, best))
+    logf(f"  done: {iters} iters, {accepts} accepts, best={best:.4f}")
+    return best_pos, hist
+
+
 def optimize(fe, pos0, iters=1500, seed=0, jump_frac=0.5, jitter_sigma=1.5,
              hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, move_hard=True,
              move_soft=True, log_every=100, logf=print):

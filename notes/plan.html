@@ -84,27 +84,66 @@
     <tr><td>Congestion</td><td>4.3e-4 rel err</td><td>37 ms (was 430)</td><td class="warn">~12-cell bias</td></tr>
   </table>
 
+  <h2>Result so far (ibm01)</h2>
+  <div class="goal">
+    Greedy local search + soft-macro co-optimization: <b>1.0387 &rarr; 0.9518</b> (+8.4%), 0 overlaps,
+    TILOS-verified, beats the RePlAce ibm01 baseline (0.9976). <b>Caveat:</b> the gain is ~entirely
+    soft-macro repositioning (2/246 hard macros moved); great for Tier-1 proxy ranking, but only
+    <b>hard</b>-macro positions carry to Tier 2 &mdash; so we now track the <b>hard-only proxy contribution</b>.
+    Hard moves currently stall: 81% of random hard proposals fail the overlap check (canvas ~80% full).
+  </div>
+
+  <h2>The optimization framework</h2>
+  <p class="why">A real placer needs both a smooth local core and global topology changes. Three composable
+    move types:</p>
+  <ol class="tasks" style="counter-reset:none">
+    <li class="task" style="padding-left:20px"><span class="title">Continuous repel</span> &mdash;
+      force-directed spreading (analytical core). Great locally, can't change topology or respect hard
+      non-overlap by itself.</li>
+    <li class="task" style="padding-left:20px"><span class="title">Discrete swap</span> &mdash;
+      move a hard macro from a hot cell to a cold cell (global exploration; finally moves hard macros).
+      Pure position-swap only stays legal for equal sizes &mdash; with 33&times; size variation it needs&hellip;</li>
+    <li class="task" style="padding-left:20px"><span class="title">Swap + correction</span> &mdash;
+      the hybrid that works: global jump, then objective-aware legalization pushes displaced neighbors aside.</li>
+  </ol>
+
+  <div class="goal">
+    <b>The right repulsion force.</b> Not generic 1/r&sup2; (that over-spreads and wastes wirelength). Our
+    density/congestion terms are <b>peak metrics</b> (mean of top 10% / top 5% cells), so descend the gradient
+    of a <b>peak-emphasizing surrogate</b> of our own score:
+    <br><code>f = &minus;&nabla;[ WL_smooth&nbsp;(&times;1, attraction) + 0.5&middot;&Sigma; g(&rho;) + 0.5&middot;&Sigma; g(cong) ]</code>
+    <br>with <code>g</code> convex &amp; peak-weighting (e.g. <code>ReLU(&rho;&minus;&tau;)&sup2;</code> or a soft
+    top-k / log-sum-exp). Force then evacuates a macro from a hotspot <em>only while it's in one</em>, spending
+    minimum wirelength. Both grids are already computed in <code>fast_eval</code>, so &nabla; is a cheap grid
+    finite-difference &mdash; no Poisson solve needed. Loop: spread &rarr; legalize &rarr; swap &rarr; repeat.
+  </div>
+
   <h2>Task queue</h2>
   <ol class="tasks">
-    <li class="task doing"><span class="title">Perturbation correctness check on ibm01</span>
+    <li class="task" style="opacity:.6"><span class="title">Perturbation correctness check on ibm01</span>
+      <span class="pill" style="background:color-mix(in srgb,var(--done) 20%,transparent);color:var(--done)">done</span>
+      <p class="why">fast_eval matches TILOS to ~1e-5 on moved configs (WL/density exact). Congestion
+        mismatch is a grid-alignment artifact at the snapped reference only — safe to optimize against.</p></li>
+    <li class="task" style="opacity:.6"><span class="title">End-to-end greedy optimizer demo on ibm01</span>
+      <span class="pill" style="background:color-mix(in srgb,var(--done) 20%,transparent);color:var(--done)">done</span>
+      <p class="why">1.0387 &rarr; 0.9518 (+8.4%), TILOS-verified. SA hurt; greedy + soft co-optimization wins.
+        Gain is soft-driven &rarr; motivates the hard-macro work below.</p></li>
+    <li class="task doing"><span class="title">Swap + correction move, tracking hard-only proxy</span>
       <span class="pill now">in progress</span>
-      <p class="why">Verify fast_eval matches TILOS on <em>moved</em> configs (random perturbations,
-        near-overlaps, edge macros), not just the initial placement — the failure mode that would make the
-        optimizer chase phantom gains. Cheap; everything depends on it.</p></li>
-    <li class="task"><span class="title">End-to-end greedy/SA optimizer demo on ibm01</span>
+      <p class="why">Density-guided hard-macro swap with legalization correction — the first move that actually
+        relocates hard macros. Measure the improvement attributable to hard moves alone (Tier-2-relevant).</p></li>
+    <li class="task"><span class="title">Continuous peak-emphasizing force field</span>
       <span class="pill next">next</span>
-      <p class="why">Full-recompute is already fast enough for thousands of moves. Propose moves biased to
-        high-congestion/high-density macros; <b>accept on the true proxy delta</b> (not density alone).
-        Legalize; verify the win with a ground-truth TILOS call.</p></li>
+      <p class="why">Analytical core: descend &minus;&nabla; of the soft-top-k surrogate of our own score
+        (density + congestion grids already in fast_eval) + WL attraction.</p></li>
+    <li class="task"><span class="title">Incremental single-move delta layer</span>
+      <p class="why">~50 ms &rarr; sub-ms/move; unlocks competitive-scale search and the full 17-benchmark suite.</p></li>
+    <li class="task"><span class="title">Min-displacement legalizer (= the correction operator)</span>
+      <span class="pill par">shared</span>
+      <p class="why">Anchor-to-original legalization so ibm08 stops blowing up and ibm06 converges; doubles as
+        the swap-correction step.</p></li>
     <li class="task"><span class="title">Full validation: 17 benchmarks × perturbations + regression test</span>
       <span class="pill par">parallel</span>
-      <p class="why">Long background run establishing trust before scaling. Lock parity in as a regression test.</p></li>
-    <li class="task"><span class="title">Incremental single-move delta layer + fix congestion bias</span>
-      <p class="why">The real speedup: update only touched nets/cells (~50 ms → sub-ms/move) for
-        competitive-scale search. Fix the 12-cell macro-shadow mismatch while in this code.</p></li>
-    <li class="task"><span class="title">Fix legalizer displacement-damage &amp; convergence</span>
-      <span class="pill par">parallel</span>
-      <p class="why">Min-displacement legalization (anchor to original) so ibm08 stops blowing up (+0.38) and
-        ibm06 converges. Independent code — can proceed alongside.</p></li>
+      <p class="why">Trust before scaling. Lock parity in as a regression test.</p></li>
   </ol>
 </div>

@@ -47,7 +47,8 @@ def _hot_macros(fe, pos, nm):
 
 
 def optimize(fe, pos0, iters=1500, seed=0, jump_frac=0.5, jitter_sigma=1.5,
-             hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, log_every=100, logf=print):
+             hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, move_hard=True,
+             move_soft=True, log_every=100, logf=print):
     """Run local search. Returns (best_pos, history) where history is a list of
     (eval_count, best_cost)."""
     rng = np.random.default_rng(seed)
@@ -80,11 +81,16 @@ def optimize(fe, pos0, iters=1500, seed=0, jump_frac=0.5, jitter_sigma=1.5,
         if it and it % 300 == 0:
             hot = _hot_macros(fe, pos, nm)
 
-        # pick a macro (hard or soft): hot-biased or uniform
+        # candidate index range restricted by move_hard/move_soft
+        lo = 0 if move_hard else nh
+        hi = nm if move_soft else nh
+        if lo >= hi:
+            break
         if rng.random() < hot_bias:
-            i = int(rng.choice(nm, p=hot / hot.sum()))
+            w = hot[lo:hi]
+            i = lo + int(rng.choice(hi - lo, p=w / w.sum()))
         else:
-            i = int(rng.integers(nm))
+            i = int(rng.integers(lo, hi))
         is_hard = i < nh
         stat["hard_prop" if is_hard else "soft_prop"] += 1
 

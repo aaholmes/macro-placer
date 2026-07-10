@@ -46,6 +46,81 @@ def _hot_macros(fe, pos, nm):
     return np.clip(hot, 1e-9, None)
 
 
+def optimize_portfolio(fe, pos0, iters=200000, seed=0, jump_frac=0.3,
+                       jitter_sigma=1.0, hot_bias=0.7,
+                       w_move=0.6, w_flip=0.2, w_swap=0.2,
+                       refresh=2000, log_every=20000, logf=print):
+    """Unified greedy over an operator portfolio (all overlap-safe):
+      - soft-macro move (jitter/jump, hot-biased)
+      - hard-macro orientation flip (Klein-4)
+      - congruent hard-macro swap (assignment)
+    Each iteration picks one operator, proposes a move, accepts iff the true
+    proxy improves. Jointly optimizes soft placement + hard orientation +
+    hard assignment throughout the descent."""
+    from collections import defaultdict
+    from placers.moves import neighbor_centroid
+    rng = np.random.default_rng(seed)
+    b = fe.b; nh = b.num_hard_macros; nm = b.num_macros
+    sz = b.macro_sizes.numpy(); hw = sz[:, 0] / 2; hh = sz[:, 1] / 2
+    W, H = fe.W, fe.H
+    groups = defaultdict(list)
+    for i in range(nh):
+        groups[tuple(np.round(sz[i], 3))].append(i)
+    glist = [np.array(v) for v in groups.values() if len(v) >= 2]
+
+    cur = fe.init_incremental(pos0)
+    best = cur; best_pos = fe.ipos.copy()
+    hist = [(0, best)]
+    hot = _hot_macros(fe, fe.ipos, nm)
+    acc = dict(move=0, flip=0, swap=0)
+    ops = ["move", "flip", "swap"]; wts = np.array([w_move, w_flip, w_swap]); wts = wts / wts.sum()
+
+    for it in range(iters):
+        if it and it % refresh == 0:
+            hot = _hot_macros(fe, fe.ipos, nm)
+        op = ops[rng.choice(3, p=wts)]
+        if op == "flip" and nh:
+            i = int(rng.integers(nh)); o = int(rng.integers(4))
+            u = fe.apply_flip(i, o); c = fe.cost_current()
+            if c < cur - 1e-12:
+                cur = c; acc["flip"] += 1
+            else:
+                fe.undo_flip(u)
+        elif op == "swap" and glist:
+            g = glist[rng.integers(len(glist))]; i = int(rng.choice(g))
+            cen = neighbor_centroid(fe, fe.ipos, i)
+            if cen is None:
+                continue
+            j = int(g[np.argmin(np.linalg.norm(fe.ipos[g] - np.array(cen), axis=1))])
+            if j == i:
+                continue
+            pi = fe.ipos[i].copy(); pj = fe.ipos[j].copy()
+            ui = fe.apply_move(i, pj[0], pj[1]); uj = fe.apply_move(j, pi[0], pi[1])
+            c = fe.cost_current()
+            if c < cur - 1e-12:
+                cur = c; acc["swap"] += 1
+            else:
+                fe.undo_move(uj); fe.undo_move(ui)
+        else:  # soft-macro move (hot-biased)
+            if rng.random() < hot_bias:
+                w = hot[nh:nm]; i = nh + int(rng.choice(nm - nh, p=w / w.sum()))
+            else:
+                i = int(rng.integers(nh, nm))
+            x = min(max(fe.ipos[i, 0] + rng.normal(0, jitter_sigma), hw[i]), W - hw[i])
+            y = min(max(fe.ipos[i, 1] + rng.normal(0, jitter_sigma), hh[i]), H - hh[i])
+            u = fe.apply_move(i, x, y); c = fe.cost_current()
+            if c < cur - 1e-12:
+                cur = c; acc["move"] += 1
+            else:
+                fe.undo_move(u)
+        if cur < best:
+            best = cur; best_pos = fe.ipos.copy()
+        if it and it % log_every == 0:
+            logf(f"  it={it:6d} acc={acc} best={best:.4f}")
+    logf(f"  done: acc={acc} best={best:.4f}")
+    return best_pos, hist + [(iters, best)]
+
+
 def optimize_congruent_swaps(fe, pos0, iters=4000, seed=0, logf=print):
     """Swap pairs of CONGRUENT (same-size) hard macros -> always overlap-free.
     Heuristic: move a macro toward its net-centroid by swapping it with the

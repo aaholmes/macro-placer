@@ -34,6 +34,51 @@ def _wl_force(fe, pos):
     return F
 
 
+def rudy_map(fe, pos):
+    """RUDY congestion estimate: each net spreads its wiring (1/W + 1/H per unit
+    area) uniformly over its bounding box. Smooth function of pin positions ->
+    its gradient is a real congestion-reducing direction (unlike the discrete
+    TILOS routing grid). Returns an [gr, gc] map. Fast via a difference array."""
+    gc = fe.plc.grid_col; gr = fe.plc.grid_row
+    gw = fe.W / gc; gh = fe.H / gr
+    owner = fe.pin_owner; off = fe.pin_off; net = fe.pin_net
+    oc = np.clip(owner, 0, None)
+    px = np.where(owner >= 0, pos[oc, 0] + off[:, 0], off[:, 0])
+    py = np.where(owner >= 0, pos[oc, 1] + off[:, 1], off[:, 1])
+    n = fe.num_nets
+    xmax = np.full(n, -np.inf); xmin = np.full(n, np.inf)
+    ymax = np.full(n, -np.inf); ymin = np.full(n, np.inf)
+    np.maximum.at(xmax, net, px); np.minimum.at(xmin, net, px)
+    np.maximum.at(ymax, net, py); np.minimum.at(ymin, net, py)
+    W = np.maximum(xmax - xmin, gw); H = np.maximum(ymax - ymin, gh)
+    d = (1.0 / W + 1.0 / H) * fe.net_weight            # wire density per net
+    cmin = np.clip((xmin // gw).astype(int), 0, gc - 1)
+    cmax = np.clip((xmax // gw).astype(int), 0, gc - 1)
+    rmin = np.clip((ymin // gh).astype(int), 0, gr - 1)
+    rmax = np.clip((ymax // gh).astype(int), 0, gr - 1)
+    diff = np.zeros((gr + 1, gc + 1))
+    np.add.at(diff, (rmin, cmin), d)
+    np.add.at(diff, (rmin, cmax + 1), -d)
+    np.add.at(diff, (rmax + 1, cmin), -d)
+    np.add.at(diff, (rmax + 1, cmax + 1), d)
+    R = np.cumsum(np.cumsum(diff, axis=0), axis=1)[:gr, :gc]
+    return R
+
+
+def _rudy_force(fe, pos):
+    """Repulsion force per macro = -grad(RUDY) at its cell (peak-weighted)."""
+    gc = fe.plc.grid_col; gr = fe.plc.grid_row
+    gw = fe.W / gc; gh = fe.H / gr
+    R = rudy_map(fe, pos)
+    gx, gy = _grid_grad(R.ravel(), gc, gr, gw, gh)
+    nm = fe.b.num_macros
+    cols = np.clip((pos[:nm, 0] // gw).astype(int), 0, gc - 1)
+    rows = np.clip((pos[:nm, 1] // gh).astype(int), 0, gr - 1)
+    F = np.zeros((nm, 2))
+    F[:, 0] = -gx[rows, cols]; F[:, 1] = -gy[rows, cols]
+    return F
+
+
 def _grid_grad(field, gc, gr, gw, gh):
     """Central-difference gradient of a flat [gr*gc] field. Returns gx,gy grids."""
     A = field.reshape(gr, gc)

@@ -105,12 +105,18 @@ def run(variant, iters=80000, seed=1, sigma=1.0, refresh=2000):
             if "dir" in variant:
                 Ffield = _field_force(fe, fe.ipos, "dens") + _field_force(fe, fe.ipos, "cong")
         cands = []
-        if variant in ("rand_soft", "dir_soft", "bestof", "bestof_combined"):
-            directed = variant != "rand_soft"
-            cands.append(eval_action(soft_move(directed and "dir" in variant or variant == "dir_soft")))
-        if variant in ("bestof", "bestof_combined"):
+        if variant == "rand_soft":
+            cands.append(eval_action(soft_move(False)))
+        elif variant == "dir_soft":
+            cands.append(eval_action(soft_move(True)))
+        elif variant in ("bestof", "bestof_combined"):
+            cands.append(eval_action(soft_move(True)))
+        elif variant == "bestof_hedged":
+            cands.append(eval_action(soft_move(False)))   # random (safety)
+            cands.append(eval_action(soft_move(True)))    # directed
+        if variant in ("bestof", "bestof_combined", "bestof_hedged"):
             cands.append(eval_action(swap_move(True)))
-        if variant == "bestof_combined":
+        if variant in ("bestof_combined", "bestof_hedged"):
             sm = soft_move(True); sw = swap_move(True)
             if sm and sw and sm[1] != sw[1] and sm[1] != sw[2]:
                 u1 = fe.apply_move(sm[1], sm[2], sm[3])
@@ -138,8 +144,8 @@ def run(variant, iters=80000, seed=1, sigma=1.0, refresh=2000):
 
 VARIANTS = [("rand_soft", "#2563eb", "random soft-move"),
             ("dir_soft", "#16a34a", "directed soft-move"),
-            ("bestof", "#d97706", "best-of {dir soft, dir swap}"),
-            ("bestof_combined", "#dc2626", "best-of {+ combined}")]
+            ("bestof_combined", "#d97706", "best-of {dir soft, swap, combined}"),
+            ("bestof_hedged", "#dc2626", "best-of {rand+dir soft, swap, combined} (hedged)")]
 fig, ax = plt.subplots(figsize=(10, 6))
 for v, col, lab in VARIANTS:
     t = time.time(); h = run(v)

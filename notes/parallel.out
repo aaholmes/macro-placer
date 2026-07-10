@@ -1,0 +1,109 @@
+=== parallel sweep: 17 benches, 17 workers, iter_cap=5000000, time_cap=240.0min ===
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm01/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 45, Row: 41
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:48:42] ibm01: 1020000 iters tilos=0.7955 ov=0 (1122s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm03/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 32, Row: 29
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:48:45] ibm03: 1020000 iters tilos=0.9884 ov=0 (1293s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm04/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 31, Row: 30
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:48:47] ibm04: 1020000 iters tilos=0.9826 ov=0 (1356s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm02/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 30, Row: 27
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:48:55] ibm02: 1020000 iters tilos=1.1310 ov=0 (1700s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm09/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 36, Row: 38
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:48:57] ibm09: 1020000 iters tilos=0.8502 ov=0 (1763s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm07/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 35, Row: 32
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:49:04] ibm07: 1020000 iters tilos=1.0986 ov=0 (2027s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm11/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 39, Row: 45
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:49:05] ibm11: 1020000 iters tilos=0.9062 ov=0 (2016s)
+[07:49:06] ibm01: 1040000 iters tilos=0.7952 ov=0 (1146s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm06/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 31, Row: 28
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:49:07] ibm06: 1020000 iters tilos=1.1423 ov=0 (2242s)
+[07:49:13] ibm03: 1040000 iters tilos=0.9882 ov=0 (1321s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm13/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 43, Row: 43
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:49:17] ibm13: 1020000 iters tilos=0.9828 ov=0 (2466s)
+[07:49:18] ibm04: 1040000 iters tilos=0.9826 ov=0 (1387s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm08/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 38, Row: 34
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:49:29] ibm08: 1020000 iters tilos=1.3039 ov=0 (2643s)
+[07:49:30] ibm01: 1060000 iters tilos=0.7950 ov=0 (1170s)
+[07:49:30] ibm01: plateaued, stopping
+[done] ibm01: 1060000 iters, 1170s
+[07:49:32] ibm02: 1040000 iters tilos=1.1309 ov=0 (1737s)
+[07:49:37] ibm09: 1040000 iters tilos=0.8501 ov=0 (1803s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm12/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 47, Row: 47
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:49:39] ibm12: 1020000 iters tilos=1.2033 ov=0 (3026s)
+[07:49:41] ibm03: 1060000 iters tilos=0.9881 ov=0 (1349s)
+[07:49:41] ibm03: plateaued, stopping
+[done] ibm03: 1060000 iters, 1349s
+[07:49:47] ibm04: 1060000 iters tilos=0.9825 ov=0 (1416s)
+[07:49:47] ibm04: plateaued, stopping
+[done] ibm04: 1060000 iters, 1416s
+[07:49:48] ibm07: 1040000 iters tilos=1.0984 ov=0 (2071s)
+[07:49:48] ibm11: 1040000 iters tilos=0.9062 ov=0 (2059s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm10/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 55, Row: 41
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:49:53] ibm10: 1020000 iters tilos=1.0567 ov=0 (2870s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm15/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 57, Row: 38
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:49:54] ibm15: 980000 iters tilos=1.1562 ov=0 (3738s)
+[07:49:56] ibm06: 1040000 iters tilos=1.1421 ov=0 (2291s)

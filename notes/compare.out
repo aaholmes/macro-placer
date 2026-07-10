@@ -1,0 +1,13 @@
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm01/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 45, Row: 41
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+greedy...
+gradient...
+hybrid...
+saved /home/laz/partcl/my-macro-placer/notes/ibm01_greedy_vs_gradient.png
+   greedy: final 0.8475 at 120s
+ gradient: final 0.9933 at 120s
+   hybrid: final 0.8470 at 125s

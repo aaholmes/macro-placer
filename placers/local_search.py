@@ -121,6 +121,89 @@ def optimize_portfolio(fe, pos0, iters=200000, seed=0, jump_frac=0.3,
     return best_pos, hist + [(iters, best)]
 
 
+def optimize_best_of(fe, pos0, iters=200000, seed=0, jitter_sigma=1.0, jump_frac=0.3,
+                     hot_bias=0.7, refresh=2000, log_every=20000, logf=print):
+    """BEST-OF-ALL-operators greedy: each iteration proposes ONE candidate of
+    every operator type (soft move, orientation flip, congruent swap), evaluates
+    all, and commits the single best-improving one. Because the soft-move
+    candidate is always considered, each step is >= a soft-only greedy step, and
+    the reached local minimum is over the full (richer) move set."""
+    from collections import defaultdict
+    from placers.moves import neighbor_centroid
+    rng = np.random.default_rng(seed)
+    b = fe.b; nh = b.num_hard_macros; nm = b.num_macros
+    sz = b.macro_sizes.numpy(); hw = sz[:, 0] / 2; hh = sz[:, 1] / 2
+    W, H = fe.W, fe.H
+    groups = defaultdict(list)
+    for i in range(nh):
+        groups[tuple(np.round(sz[i], 3))].append(i)
+    glist = [np.array(v) for v in groups.values() if len(v) >= 2]
+
+    cur = fe.init_incremental(pos0)
+    best = cur; best_pos = fe.ipos.copy()
+    hist = [(0, best)]
+    hot = _hot_macros(fe, fe.ipos, nm)
+    acc = dict(move=0, flip=0, swap=0)
+
+    for it in range(iters):
+        if it and it % refresh == 0:
+            hot = _hot_macros(fe, fe.ipos, nm)
+        cands = []  # (delta, kind, apply_thunk)  -- evaluated by apply/undo
+
+        # --- soft-move candidate ---
+        if rng.random() < hot_bias:
+            w = hot[nh:nm]; si = nh + int(rng.choice(nm - nh, p=w / w.sum()))
+        else:
+            si = int(rng.integers(nh, nm))
+        sx = min(max(fe.ipos[si, 0] + rng.normal(0, jitter_sigma), hw[si]), W - hw[si])
+        sy = min(max(fe.ipos[si, 1] + rng.normal(0, jitter_sigma), hh[si]), H - hh[si])
+        u = fe.apply_move(si, sx, sy); c = fe.cost_current(); fe.undo_move(u)
+        cands.append((c - cur, "move", ("move", si, sx, sy)))
+
+        # --- flip candidate (best of the 3 non-current orientations of a macro) ---
+        if nh:
+            fi = int(rng.integers(nh)); base = int(fe.macro_orient[fi])
+            bo, bc = base, cur
+            for o in range(4):
+                if o == base:
+                    continue
+                uf = fe.apply_flip(fi, o); c = fe.cost_current(); fe.undo_flip(uf)
+                if c < bc:
+                    bc, bo = c, o
+            if bo != base:
+                cands.append((bc - cur, "flip", ("flip", fi, bo)))
+
+        # --- congruent-swap candidate ---
+        if glist:
+            g = glist[rng.integers(len(glist))]; i = int(rng.choice(g))
+            cen = neighbor_centroid(fe, fe.ipos, i)
+            if cen is not None:
+                j = int(g[np.argmin(np.linalg.norm(fe.ipos[g] - np.array(cen), axis=1))])
+                if j != i:
+                    pi = fe.ipos[i].copy(); pj = fe.ipos[j].copy()
+                    ui = fe.apply_move(i, pj[0], pj[1]); uj = fe.apply_move(j, pi[0], pi[1])
+                    c = fe.cost_current(); fe.undo_move(uj); fe.undo_move(ui)
+                    cands.append((c - cur, "swap", ("swap", i, j, pi, pj)))
+
+        # --- commit the single best-improving candidate ---
+        cands.sort(key=lambda t: t[0])
+        d, kind, act = cands[0]
+        if d < -1e-12:
+            if act[0] == "move":
+                fe.apply_move(act[1], act[2], act[3])
+            elif act[0] == "flip":
+                fe.apply_flip(act[1], act[2])
+            else:
+                fe.apply_move(act[1], act[4][0], act[4][1]); fe.apply_move(act[2], act[3][0], act[3][1])
+            cur += d; acc[kind] += 1
+            if cur < best:
+                best = cur; best_pos = fe.ipos.copy()
+        if it and it % log_every == 0:
+            hist.append((it, best)); logf(f"  it={it:6d} acc={acc} best={best:.4f}")
+    logf(f"  done: acc={acc} best={best:.4f}")
+    return best_pos, hist + [(iters, best)]
+
+
 def optimize_congruent_swaps(fe, pos0, iters=4000, seed=0, logf=print):
     """Swap pairs of CONGRUENT (same-size) hard macros -> always overlap-free.
     Heuristic: move a macro toward its net-centroid by swapping it with the

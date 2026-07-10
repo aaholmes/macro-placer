@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 .venv/
+# transient run artifacts (regenerable; actively written by sweeps)
+notes/checkpoints/
+notes/results/
+notes/*.out
+notes/*.stdout

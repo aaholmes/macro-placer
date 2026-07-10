@@ -1,0 +1,118 @@
+[00:28:27] === overnight sweep start: 17 benches, iter_cap=1000000, time_cap=60.0min, deadline=9.0h ===
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm01/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 45, Row: 41
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[00:28:28] ibm01: resume from 500000 iters, best=0.8013
+[00:28:50] ibm01: 520000 iters, fast=0.8009 tilos=0.8012 ov=0 (570s)
+[00:29:12] ibm01: 540000 iters, fast=0.8004 tilos=0.8006 ov=0 (592s)
+[00:29:34] ibm01: 560000 iters, fast=0.8001 tilos=0.8003 ov=0 (614s)
+[00:29:56] ibm01: 580000 iters, fast=0.7994 tilos=0.7996 ov=0 (637s)
+[00:30:18] ibm01: 600000 iters, fast=0.7991 tilos=0.7993 ov=0 (658s)
+[00:30:40] ibm01: 620000 iters, fast=0.7987 tilos=0.7989 ov=0 (681s)
+[00:31:02] ibm01: 640000 iters, fast=0.7984 tilos=0.7986 ov=0 (703s)
+[00:31:25] ibm01: 660000 iters, fast=0.7981 tilos=0.7983 ov=0 (725s)
+[00:31:47] ibm01: 680000 iters, fast=0.7977 tilos=0.7979 ov=0 (747s)
+[00:32:09] ibm01: 700000 iters, fast=0.7975 tilos=0.7977 ov=0 (769s)
+[00:32:30] ibm01: 720000 iters, fast=0.7975 tilos=0.7977 ov=0 (791s)
+[00:32:53] ibm01: 740000 iters, fast=0.7974 tilos=0.7976 ov=0 (813s)
+[00:33:14] ibm01: 760000 iters, fast=0.7970 tilos=0.7972 ov=0 (835s)
+[00:33:36] ibm01: 780000 iters, fast=0.7968 tilos=0.7971 ov=0 (857s)
+[00:33:58] ibm01: 800000 iters, fast=0.7967 tilos=0.7969 ov=0 (878s)
+[00:34:20] ibm01: 820000 iters, fast=0.7964 tilos=0.7966 ov=0 (900s)
+[00:34:42] ibm01: 840000 iters, fast=0.7962 tilos=0.7965 ov=0 (922s)
+[00:35:04] ibm01: 860000 iters, fast=0.7961 tilos=0.7965 ov=0 (944s)
+[00:35:26] ibm01: 880000 iters, fast=0.7961 tilos=0.7964 ov=0 (966s)
+[00:35:48] ibm01: 900000 iters, fast=0.7960 tilos=0.7963 ov=0 (988s)
+[00:36:10] ibm01: 920000 iters, fast=0.7959 tilos=0.7962 ov=0 (1010s)
+[00:36:32] ibm01: 940000 iters, fast=0.7958 tilos=0.7961 ov=0 (1032s)
+[00:36:54] ibm01: 960000 iters, fast=0.7957 tilos=0.7959 ov=0 (1054s)
+[00:37:16] ibm01: 980000 iters, fast=0.7955 tilos=0.7958 ov=0 (1076s)
+[00:37:38] ibm01: 1000000 iters, fast=0.7954 tilos=0.7957 ov=0 (1098s)
+[00:37:38] ibm01: DONE (1000000 iters, 1098s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm02/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 30, Row: 27
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[00:37:39] ibm02: resume from 500000 iters, best=1.1356
+[00:38:14] ibm02: 520000 iters, fast=1.1353 tilos=1.1353 ov=0 (864s)
+[00:38:47] ibm02: 540000 iters, fast=1.1350 tilos=1.1350 ov=0 (898s)
+[00:39:21] ibm02: 560000 iters, fast=1.1348 tilos=1.1348 ov=0 (931s)
+[00:39:54] ibm02: 580000 iters, fast=1.1346 tilos=1.1346 ov=0 (965s)
+[00:40:27] ibm02: 600000 iters, fast=1.1343 tilos=1.1343 ov=0 (998s)
+[00:41:01] ibm02: 620000 iters, fast=1.1342 tilos=1.1342 ov=0 (1031s)
+[00:41:34] ibm02: 640000 iters, fast=1.1339 tilos=1.1339 ov=0 (1065s)
+[00:42:07] ibm02: 660000 iters, fast=1.1338 tilos=1.1338 ov=0 (1098s)
+[00:42:41] ibm02: 680000 iters, fast=1.1335 tilos=1.1335 ov=0 (1131s)
+[00:43:14] ibm02: 700000 iters, fast=1.1333 tilos=1.1333 ov=0 (1165s)
+[00:43:48] ibm02: 720000 iters, fast=1.1331 tilos=1.1331 ov=0 (1199s)
+[00:44:21] ibm02: 740000 iters, fast=1.1329 tilos=1.1329 ov=0 (1232s)
+[00:44:54] ibm02: 760000 iters, fast=1.1327 tilos=1.1327 ov=0 (1265s)
+[00:45:28] ibm02: 780000 iters, fast=1.1325 tilos=1.1325 ov=0 (1299s)
+[00:46:01] ibm02: 800000 iters, fast=1.1323 tilos=1.1323 ov=0 (1332s)
+[00:46:35] ibm02: 820000 iters, fast=1.1321 tilos=1.1321 ov=0 (1366s)
+[00:47:08] ibm02: 840000 iters, fast=1.1320 tilos=1.1320 ov=0 (1399s)
+[00:47:41] ibm02: 860000 iters, fast=1.1318 tilos=1.1318 ov=0 (1432s)
+[00:48:15] ibm02: 880000 iters, fast=1.1317 tilos=1.1317 ov=0 (1465s)
+[00:48:48] ibm02: 900000 iters, fast=1.1317 tilos=1.1317 ov=0 (1499s)
+[00:49:22] ibm02: 920000 iters, fast=1.1315 tilos=1.1315 ov=0 (1533s)
+[00:49:56] ibm02: 940000 iters, fast=1.1314 tilos=1.1314 ov=0 (1566s)
+[00:50:29] ibm02: 960000 iters, fast=1.1313 tilos=1.1313 ov=0 (1600s)
+[00:51:02] ibm02: 980000 iters, fast=1.1312 tilos=1.1312 ov=0 (1633s)
+[00:51:35] ibm02: 1000000 iters, fast=1.1311 tilos=1.1311 ov=0 (1666s)
+[00:51:35] ibm02: DONE (1000000 iters, 1666s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm03/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 32, Row: 29
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[00:51:36] ibm03: resume from 500000 iters, best=0.9932
+[00:52:02] ibm03: 520000 iters, fast=0.9927 tilos=0.9928 ov=0 (658s)
+[00:52:27] ibm03: 540000 iters, fast=0.9926 tilos=0.9926 ov=0 (683s)
+[00:52:52] ibm03: 560000 iters, fast=0.9925 tilos=0.9925 ov=0 (708s)
+[00:53:17] ibm03: 580000 iters, fast=0.9924 tilos=0.9924 ov=0 (733s)
+[00:53:43] ibm03: 600000 iters, fast=0.9921 tilos=0.9922 ov=0 (758s)
+[00:54:08] ibm03: 620000 iters, fast=0.9919 tilos=0.9920 ov=0 (784s)
+[00:54:33] ibm03: 640000 iters, fast=0.9916 tilos=0.9916 ov=0 (809s)
+[00:54:59] ibm03: 660000 iters, fast=0.9914 tilos=0.9915 ov=0 (834s)
+[00:55:24] ibm03: 680000 iters, fast=0.9914 tilos=0.9915 ov=0 (859s)
+[00:55:50] ibm03: 700000 iters, fast=0.9913 tilos=0.9913 ov=0 (885s)
+[00:56:15] ibm03: 720000 iters, fast=0.9912 tilos=0.9912 ov=0 (911s)
+[00:56:41] ibm03: 740000 iters, fast=0.9911 tilos=0.9912 ov=0 (936s)
+[00:57:06] ibm03: 760000 iters, fast=0.9910 tilos=0.9910 ov=0 (962s)
+[00:57:31] ibm03: 780000 iters, fast=0.9909 tilos=0.9910 ov=0 (987s)
+[00:57:57] ibm03: 800000 iters, fast=0.9909 tilos=0.9909 ov=0 (1012s)
+[00:58:22] ibm03: 820000 iters, fast=0.9908 tilos=0.9909 ov=0 (1038s)
+[00:58:47] ibm03: 840000 iters, fast=0.9908 tilos=0.9908 ov=0 (1063s)
+[00:59:13] ibm03: 860000 iters, fast=0.9907 tilos=0.9907 ov=0 (1088s)
+[00:59:38] ibm03: 880000 iters, fast=0.9906 tilos=0.9907 ov=0 (1114s)
+[01:00:04] ibm03: 900000 iters, fast=0.9906 tilos=0.9907 ov=0 (1139s)
+[01:00:29] ibm03: 920000 iters, fast=0.9904 tilos=0.9905 ov=0 (1165s)
+[01:00:55] ibm03: 940000 iters, fast=0.9904 tilos=0.9904 ov=0 (1190s)
+[01:01:20] ibm03: 960000 iters, fast=0.9898 tilos=0.9898 ov=0 (1216s)
+[01:01:45] ibm03: 980000 iters, fast=0.9894 tilos=0.9895 ov=0 (1241s)
+[01:02:11] ibm03: 1000000 iters, fast=0.9887 tilos=0.9888 ov=0 (1267s)
+[01:02:11] ibm03: DONE (1000000 iters, 1267s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm04/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 31, Row: 30
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[01:02:12] ibm04: resume from 500000 iters, best=0.9872
+[01:02:40] ibm04: 520000 iters, fast=0.9869 tilos=0.9869 ov=0 (680s)
+[01:03:07] ibm04: 540000 iters, fast=0.9866 tilos=0.9866 ov=0 (707s)
+[01:03:34] ibm04: 560000 iters, fast=0.9865 tilos=0.9865 ov=0 (734s)
+[01:04:02] ibm04: 580000 iters, fast=0.9864 tilos=0.9864 ov=0 (762s)
+[01:04:29] ibm04: 600000 iters, fast=0.9862 tilos=0.9862 ov=0 (788s)
+[01:04:56] ibm04: 620000 iters, fast=0.9860 tilos=0.9860 ov=0 (816s)
+[01:05:23] ibm04: 640000 iters, fast=0.9859 tilos=0.9859 ov=0 (842s)
+[01:05:50] ibm04: 660000 iters, fast=0.9858 tilos=0.9858 ov=0 (870s)
+[01:06:17] ibm04: 680000 iters, fast=0.9855 tilos=0.9855 ov=0 (897s)
+[01:06:44] ibm04: 700000 iters, fast=0.9853 tilos=0.9853 ov=0 (924s)
+[01:07:11] ibm04: 720000 iters, fast=0.9850 tilos=0.9850 ov=0 (951s)

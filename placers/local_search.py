@@ -46,6 +46,70 @@ def _hot_macros(fe, pos, nm):
     return np.clip(hot, 1e-9, None)
 
 
+def optimize_congruent_swaps(fe, pos0, iters=4000, seed=0, logf=print):
+    """Swap pairs of CONGRUENT (same-size) hard macros -> always overlap-free.
+    Heuristic: move a macro toward its net-centroid by swapping it with the
+    congruent macro currently nearest that centroid (assignment optimization).
+    Accept on true proxy. Assumes fe.init_incremental already called."""
+    from collections import defaultdict
+    from placers.moves import neighbor_centroid
+    nh = fe.b.num_hard_macros; sz = fe.b.macro_sizes.numpy()
+    groups = defaultdict(list)
+    for i in range(nh):
+        groups[tuple(np.round(sz[i], 3))].append(i)
+    glist = [np.array(v) for v in groups.values() if len(v) >= 2]
+    rng = np.random.default_rng(seed)
+    cur = fe.cost_current(); accepts = 0
+    for it in range(iters):
+        g = glist[rng.integers(len(glist))]
+        i = int(rng.choice(g))
+        cen = neighbor_centroid(fe, fe.ipos, i)
+        if cen is None:
+            continue
+        d = np.linalg.norm(fe.ipos[g] - np.array(cen), axis=1)
+        j = int(g[np.argmin(d)])
+        if j == i:
+            continue
+        pi = fe.ipos[i].copy(); pj = fe.ipos[j].copy()
+        ui = fe.apply_move(i, pj[0], pj[1]); uj = fe.apply_move(j, pi[0], pi[1])
+        c = fe.cost_current()
+        if c < cur - 1e-12:
+            cur = c; accepts += 1
+        else:
+            fe.undo_move(uj); fe.undo_move(ui)
+    logf(f"  congruent swaps: {accepts} accepted, cost {cur:.4f}")
+    return fe.ipos.copy(), cur, accepts
+
+
+def optimize_flips(fe, pos0, sweeps=4, logf=print):
+    """Greedy Klein-4 orientation optimization over hard macros: for each macro
+    try all 4 orientations, keep the best. Footprint unchanged -> overlaps stay
+    at zero. Returns (pos, orient, best_cost)."""
+    fe.init_incremental(pos0)
+    nh = fe.b.num_hard_macros
+    cur = fe.cost_current()
+    start = cur
+    for sweep in range(sweeps):
+        improved = 0
+        for i in range(nh):
+            base = int(fe.macro_orient[i])
+            best_o, best_c = base, cur
+            for o in range(4):
+                if o == base:
+                    continue
+                u = fe.apply_flip(i, o)
+                c = fe.cost_current()
+                fe.undo_flip(u)
+                if c < best_c - 1e-12:
+                    best_c, best_o = c, o
+            if best_o != base:
+                fe.apply_flip(i, best_o); cur = best_c; improved += 1
+        logf(f"  flip sweep {sweep}: {improved} flips, cost {cur:.4f}")
+        if improved == 0:
+            break
+    return fe.ipos.copy(), fe.macro_orient.copy(), cur
+
+
 def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0,
                   hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, move_hard=True,
                   move_soft=True, refresh=2000, log_every=2000, logf=print):

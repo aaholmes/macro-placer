@@ -410,11 +410,59 @@ class FastEval:
         y = np.where(owner >= 0, pos[oc, 1] + off[:, 1], off[:, 1])
         return (x.max() - x.min()) + (y.max() - y.min())
 
+    # Klein-4 orientations: sign applied to pin offsets (N, FN=mirror-x,
+    # FS=mirror-y, S=180). Footprint unchanged, so no overlap/density change.
+    _ORIENT_SIGN = {0: (1.0, 1.0), 1: (-1.0, 1.0), 2: (1.0, -1.0), 3: (-1.0, -1.0)}
+
+    def _init_orient(self):
+        self.pin_base_off = self.pin_off.copy()
+        self.macro_orient = np.zeros(self.b.num_macros, dtype=np.int64)
+        mp = {}
+        for pidx, o in enumerate(self.pin_owner):
+            if o >= 0:
+                mp.setdefault(int(o), []).append(pidx)
+        self.macro_pins = {k: np.array(v) for k, v in mp.items()}
+
+    def apply_flip(self, i, orient):
+        """Set hard macro i to a Klein-4 orientation, updating WL + congestion
+        incrementally (footprint/density unchanged). Returns undo token."""
+        pins = self.macro_pins.get(i)
+        old = int(self.macro_orient[i])
+        if pins is None or len(pins) == 0 or orient == old:
+            return dict(i=i, orient=old, noop=True)
+        cong_nets = self._macro_cong_arr.get(i, _EMPTY)
+        wl_nets = self.macro_nets.get(i, _EMPTY)
+        undo = dict(i=i, orient=old, noop=False, wl_sum=self.wl_sum,
+                    wl_nets=wl_nets,
+                    wl_vals=self.wl_net[wl_nets].copy() if len(wl_nets) else None)
+        for j in cong_nets:
+            self._add_net_route(int(j), -1.0)
+        sx, sy = self._ORIENT_SIGN[orient]
+        self.pin_off[pins, 0] = self.pin_base_off[pins, 0] * sx
+        self.pin_off[pins, 1] = self.pin_base_off[pins, 1] * sy
+        self.macro_orient[i] = orient
+        for j in cong_nets:
+            self._add_net_route(int(j), +1.0)
+        if len(wl_nets):
+            new = np.array([self._net_hpwl(int(j), self.ipos) for j in wl_nets])
+            self.wl_sum += float((self.net_weight[wl_nets] * (new - self.wl_net[wl_nets])).sum())
+            self.wl_net[wl_nets] = new
+        return undo
+
+    def undo_flip(self, undo):
+        if undo.get("noop"):
+            return
+        self.apply_flip(undo["i"], undo["orient"])
+        self.wl_sum = undo["wl_sum"]
+        if undo["wl_vals"] is not None:
+            self.wl_net[undo["wl_nets"]] = undo["wl_vals"]
+
     def init_incremental(self, pos):
         """Build all live state for incremental evaluation from scratch."""
         if not hasattr(self, "cong_nets"):
             self._build_congestion_ir()
         self._build_wl_slices()
+        self._init_orient()
         self.ipos = np.asarray(pos, np.float64).copy()
         # wirelength: per-net hpwl + running weighted sum
         self.wl_net = np.array([self._net_hpwl(j, self.ipos)

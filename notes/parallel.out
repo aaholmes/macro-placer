@@ -107,3 +107,86 @@
 #[OVERLAP THRESHOLD] Threshold: 0.0040
 [07:49:54] ibm15: 980000 iters tilos=1.1562 ov=0 (3738s)
 [07:49:56] ibm06: 1040000 iters tilos=1.1421 ov=0 (2291s)
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm14/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 49, Row: 44
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:50:07] ibm14: 940000 iters tilos=1.1533 ov=0 (3727s)
+[07:50:08] ibm02: 1060000 iters tilos=1.1308 ov=0 (1774s)
+[07:50:08] ibm02: plateaued, stopping
+[done] ibm02: 1060000 iters, 1774s
+[07:50:09] ibm13: 1040000 iters tilos=0.9827 ov=0 (2519s)
+[07:50:15] ibm09: 1060000 iters tilos=0.8500 ov=0 (1841s)
+[07:50:15] ibm09: plateaued, stopping
+[done] ibm09: 1060000 iters, 1841s
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm18/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 55, Row: 39
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:50:16] ibm18: 780000 iters tilos=1.2951 ov=0 (3783s)
+[07:50:25] ibm08: 1040000 iters tilos=1.3038 ov=0 (2703s)
+[07:50:31] ibm11: 1060000 iters tilos=0.9061 ov=0 (2102s)
+[07:50:31] ibm11: plateaued, stopping
+[done] ibm11: 1060000 iters, 2102s
+[07:50:31] ibm07: 1060000 iters tilos=1.0982 ov=0 (2114s)
+[07:50:31] ibm07: plateaued, stopping
+[done] ibm07: 1060000 iters, 2114s
+[07:50:43] ibm06: 1060000 iters tilos=1.1420 ov=0 (2339s)
+[07:50:43] ibm06: plateaued, stopping
+[done] ibm06: 1060000 iters, 2339s
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm16/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 45, Row: 48
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:50:44] ibm16: 780000 iters tilos=1.1034 ov=0 (3777s)
+[07:50:46] ibm12: 1040000 iters tilos=1.2030 ov=0 (3092s)
+[07:50:56] ibm10: 1040000 iters tilos=1.0566 ov=0 (2931s)
+[07:51:02] ibm13: 1060000 iters tilos=0.9826 ov=0 (2572s)
+[07:51:02] ibm13: plateaued, stopping
+[done] ibm13: 1060000 iters, 2572s
+[07:51:17] ibm15: 1000000 iters tilos=1.1559 ov=0 (3822s)
+[07:51:21] ibm08: 1060000 iters tilos=1.3038 ov=0 (2758s)
+[07:51:21] ibm08: plateaued, stopping
+[done] ibm08: 1060000 iters, 2758s
+#[INFO] Reading from /home/laz/partcl/macro-place-challenge-2026/external/MacroPlacement/Testcases/ICCAD04/ibm17/netlist.pb.txt
+[INFO] Retrieving Meta information from .plc comments
+#[PLACEMENT GRID] Col: 51, Row: 44
+#[ROUTES PER MICRON] Hor: 65.96, Ver: 106.96
+#[CONGESTION SMOOTH RANGE] Smooth Range: 2
+#[OVERLAP THRESHOLD] Threshold: 0.0040
+[07:51:22] ibm17: 660000 iters tilos=1.2762 ov=0 (3709s)
+[07:51:33] ibm14: 960000 iters tilos=1.1532 ov=0 (3813s)
+[07:51:50] ibm12: 1060000 iters tilos=1.2026 ov=0 (3157s)
+[07:51:50] ibm12: plateaued, stopping
+[done] ibm12: 1060000 iters, 3157s
+[07:51:56] ibm10: 1060000 iters tilos=1.0566 ov=0 (2993s)
+[07:51:56] ibm10: plateaued, stopping
+[done] ibm10: 1060000 iters, 2993s
+[07:51:59] ibm18: 800000 iters tilos=1.2949 ov=0 (3886s)
+[07:52:29] ibm16: 800000 iters tilos=1.1032 ov=0 (3883s)
+[07:52:38] ibm15: 1020000 iters tilos=1.1553 ov=0 (3903s)
+[07:52:57] ibm14: 980000 iters tilos=1.1530 ov=0 (3898s)
+[07:52:57] ibm14: plateaued, stopping
+[done] ibm14: 980000 iters, 3898s
+[07:53:23] ibm17: 680000 iters tilos=1.2755 ov=0 (3834s)
+[07:53:40] ibm18: 820000 iters tilos=1.2948 ov=0 (3988s)
+[07:53:40] ibm18: plateaued, stopping
+[done] ibm18: 820000 iters, 3988s
+[07:53:58] ibm15: 1040000 iters tilos=1.1551 ov=0 (3984s)
+[07:54:11] ibm16: 820000 iters tilos=1.1028 ov=0 (3986s)
+[07:54:11] ibm16: plateaued, stopping
+[done] ibm16: 820000 iters, 3986s
+[07:55:17] ibm15: 1060000 iters tilos=1.1550 ov=0 (4063s)
+[07:55:17] ibm15: plateaued, stopping
+[done] ibm15: 1060000 iters, 4063s
+[07:55:20] ibm17: 700000 iters tilos=1.2753 ov=0 (3953s)
+[07:57:15] ibm17: 720000 iters tilos=1.2748 ov=0 (4068s)
+[07:57:15] ibm17: plateaued, stopping
+[done] ibm17: 720000 iters, 4068s
+=== parallel sweep finished ===

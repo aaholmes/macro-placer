@@ -36,9 +36,10 @@ ALL = [f"ibm{n:02d}" for n in [1,2,3,4,6,7,8,9,10,11,12,13,14,15,16,17,18]]
 
 
 def run_one(args):
-    name, iter_cap, time_cap_s, chunk, plateau_eps = args
+    name, iter_cap, time_cap_s, chunk, plateau_eps, seed = args
     os.makedirs(CKPT, exist_ok=True); os.makedirs(RES, exist_ok=True)
-    ck = f"{CKPT}/{name}.npz"; rj = f"{RES}/{name}.json"
+    tag = name if seed == 0 else f"{name}_s{seed}"
+    ck = f"{CKPT}/{tag}.npz"; rj = f"{RES}/{tag}.json"
     try:
         bench, plc = load_benchmark_from_dir(
             f"{CHAL}/external/MacroPlacement/Testcases/ICCAD04/{name}")
@@ -55,7 +56,7 @@ def run_one(args):
 
         prev_best = None; flat = 0; t_start = time.time()
         while iters_done < iter_cap and elapsed < time_cap_s:
-            best, hist = optimize_fast(fe, pos, iters=chunk, seed=1000 + iters_done,
+            best, hist = optimize_fast(fe, pos, iters=chunk, seed=seed * 100003 + 1000 + iters_done,
                                        T0=0.0, move_hard=False, move_soft=True,
                                        refresh=chunk, log_every=chunk + 1,
                                        logf=lambda *a: None)
@@ -64,24 +65,24 @@ def run_one(args):
             bc = hist[-1][1]
             np.savez(ck, best_pos=pos, iters_done=iters_done, elapsed=elapsed, best_cost=bc)
             c = compute_proxy_cost(torch.tensor(pos, dtype=torch.float32), bench, plc)
-            json.dump({"benchmark": name, "iters": iters_done, "fast": bc,
+            json.dump({"benchmark": name, "seed": seed, "iters": iters_done, "fast": bc,
                        "tilos": float(c["proxy_cost"]), "overlaps": int(c["overlap_count"]),
                        "seconds": elapsed}, open(rj, "w"))
-            print(f"[{time.strftime('%H:%M:%S')}] {name}: {iters_done} iters "
+            print(f"[{time.strftime('%H:%M:%S')}] {tag}: {iters_done} iters "
                   f"tilos={c['proxy_cost']:.4f} ov={c['overlap_count']} ({elapsed:.0f}s)", flush=True)
             # plateau detection
             if prev_best is not None and (prev_best - bc) < plateau_eps:
                 flat += 1
                 if flat >= 2:
-                    print(f"[{time.strftime('%H:%M:%S')}] {name}: plateaued, stopping", flush=True)
+                    print(f"[{time.strftime('%H:%M:%S')}] {tag}: plateaued, stopping", flush=True)
                     break
             else:
                 flat = 0
             prev_best = bc
-        return name, iters_done, elapsed
+        return tag, iters_done, elapsed
     except Exception as e:
-        print(f"{name}: ERROR {type(e).__name__}: {e}", flush=True)
-        return name, -1, 0
+        print(f"{tag}: ERROR {type(e).__name__}: {e}", flush=True)
+        return tag, -1, 0
 
 
 if __name__ == "__main__":
@@ -92,12 +93,14 @@ if __name__ == "__main__":
     ap.add_argument("--plateau-eps", type=float, default=5e-4)
     ap.add_argument("--workers", type=int, default=min(len(ALL), max(1, mp.cpu_count() - 2)))
     ap.add_argument("--benches", type=str, default=",".join(ALL))
+    ap.add_argument("--seeds", type=int, default=1, help="chains per benchmark (keep best)")
     a = ap.parse_args()
     benches = a.benches.split(",")
-    jobs = [(n, a.iter_cap, a.time_cap_min * 60, a.chunk, a.plateau_eps) for n in benches]
-    print(f"=== parallel sweep: {len(benches)} benches, {a.workers} workers, "
-          f"iter_cap={a.iter_cap}, time_cap={a.time_cap_min}min ===", flush=True)
+    jobs = [(n, a.iter_cap, a.time_cap_min * 60, a.chunk, a.plateau_eps, s)
+            for n in benches for s in range(a.seeds)]
+    print(f"=== parallel sweep: {len(benches)} benches x {a.seeds} seeds = {len(jobs)} chains, "
+          f"{a.workers} workers, iter_cap={a.iter_cap}, time_cap={a.time_cap_min}min ===", flush=True)
     with mp.Pool(a.workers) as pool:
-        for name, it, el in pool.imap_unordered(run_one, jobs):
-            print(f"[done] {name}: {it} iters, {el:.0f}s", flush=True)
+        for tag, it, el in pool.imap_unordered(run_one, jobs):
+            print(f"[done] {tag}: {it} iters, {el:.0f}s", flush=True)
     print("=== parallel sweep finished ===", flush=True)

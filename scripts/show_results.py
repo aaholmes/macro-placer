@@ -7,7 +7,10 @@ RP = {'ibm01':0.9976,'ibm02':1.8370,'ibm03':1.3222,'ibm04':1.3024,'ibm06':1.6187
 'ibm17':1.6446,'ibm18':1.7722}
 rows = {}
 for f in glob.glob(f"{RES}/*.json"):
-    d = json.load(open(f)); rows[d["benchmark"]] = d
+    d = json.load(open(f)); nm = d["benchmark"]
+    # keep the best (lowest valid) result across seeds per benchmark
+    if nm not in rows or (d["overlaps"] == 0 and d["tilos"] < rows[nm]["tilos"]):
+        rows[nm] = d
 print(f"{'bench':>6} {'ours':>7} {'RePlAce':>8} {'vsRP':>7} {'ov':>3} {'iters':>8} {'sec':>6}")
 ours = []; rp = []
 for b in RP:

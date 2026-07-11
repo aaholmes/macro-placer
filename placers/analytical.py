@@ -151,6 +151,36 @@ class DifferentiablePlacer:
             m = ((ox > 0) & (oy > 0)) & torch.triu(torch.ones(nh, nh, device=self.dev), 1).bool()
             return int(m.sum())
 
+    def legalize_soft(self, coord, steps=12, eta=0.9):
+        """Differentiable min-displacement legalizer: unrolled Jacobi push-apart
+        of hard macros along the least-penetration axis. Gradient flows through,
+        so optimizing loss(legalize_soft(x)) is score-aware overlap resolution --
+        the placement is scored AS IF legalized, and moves that legalize cheaply
+        are preferred. Soft macros untouched."""
+        nh = self.nh
+        c = coord
+        sepx = self.hw[:nh, None] + self.hw[None, :nh]
+        sepy = self.hh[:nh, None] + self.hh[None, :nh]
+        eye = torch.eye(nh, device=self.dev, dtype=torch.bool)
+        for _ in range(steps):
+            x = c[:nh, 0]; y = c[:nh, 1]
+            dx = x[:, None] - x[None, :]; dy = y[:, None] - y[None, :]
+            penx = torch.clamp(sepx - dx.abs(), min=0.0)
+            peny = torch.clamp(sepy - dy.abs(), min=0.0)
+            ov = (penx > 0) & (peny > 0) & ~eye
+            along_x = penx <= peny
+            # push each pair apart along its least-penetration axis (half each)
+            px = torch.where(ov & along_x, 0.5 * penx * torch.sign(dx), torch.zeros_like(dx))
+            py = torch.where(ov & ~along_x, 0.5 * peny * torch.sign(dy), torch.zeros_like(dy))
+            dhard = torch.stack([eta * px.sum(1), eta * py.sum(1)], dim=1)   # [nh,2]
+            nsoft = self.b.num_macros - nh
+            delta = torch.cat([dhard, torch.zeros(nsoft, 2, device=self.dev)], dim=0)
+            c = c + delta
+            cx = c[:, 0].clamp(self.hw, self.W - self.hw)
+            cy = c[:, 1].clamp(self.hh, self.H - self.hh)
+            c = torch.stack([cx, cy], dim=1)
+        return c
+
     def density(self, coord, tau=0.05, target=None, topk="softmax"):
         target = self.util if target is None else target
         over = torch.clamp(self.density_field(coord) - target, min=0.0)
@@ -198,20 +228,21 @@ def anneal(t, lo, hi, geometric=False):
 
 def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
                lam_ov0=0.0, lam_ov1=0.0, tau_d=0.05, tau_c=0.02, target=0.8,
-               topk="softmax"):
+               topk="softmax", legalize_steps=0):
     """Default objective = challenge proxy, with annealing over t:
       gamma  (WL smoothing) large->small,  lam_d (density) small->large,
       lam_ov (hard-overlap penalty, Form A) small->large so macros pass through
              early and become legal by the end (legalizer-free).
     `topk` selects the soft-top-k operator ('softmax' | 'lapsum')."""
     def loss(P, coord, t):
+        c = P.legalize_soft(coord, steps=legalize_steps) if legalize_steps else coord
         gamma = anneal(t, P.gw * gamma_hi_mult, P.gw, geometric=True)
         lam_d = anneal(t, lam_d0, lam_d1)
-        wl = P.wirelength(coord, gamma)
-        de = P.density(coord, tau=tau_d, target=target, topk=topk)
+        wl = P.wirelength(c, gamma)
+        de = P.density(c, tau=tau_d, target=target, topk=topk)
         L = wl + lam_d * de
         if lam_c:
-            L = L + lam_c * P.congestion(coord, tau=tau_c, topk=topk)
+            L = L + lam_c * P.congestion(c, tau=tau_c, topk=topk)
         if lam_ov1 or lam_ov0:
             lam_ov = anneal(t, max(lam_ov0, 1e-9), max(lam_ov1, 1e-9), geometric=True)
             L = L + lam_ov * P.hard_overlap(coord)

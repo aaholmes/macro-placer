@@ -108,16 +108,16 @@ class DifferentiablePlacer:
         xmin, xmax, ymin, ymax = self._bbox(coord, gamma)
         return (self.nw * ((xmax - xmin) + (ymax - ymin))).sum() / ((self.W + self.H) * self.net_cnt)
 
-    def density(self, coord, tau=0.05, target=None):
-        target = self.util if target is None else target
+    def density_field(self, coord):
+        """Per-cell density rho (Gaussian area splat), differentiable."""
         sx = torch.clamp(self.hw, min=self.gw); sy = torch.clamp(self.hh, min=self.gh)
         gx = torch.exp(-((coord[:, 0:1] - self.cxs) ** 2) / (2 * sx[:, None] ** 2))
         gy = torch.exp(-((coord[:, 1:2] - self.cys) ** 2) / (2 * sy[:, None] ** 2))
         gx = gx / (gx.sum(1, keepdim=True) + 1e-9); gy = gy / (gy.sum(1, keepdim=True) + 1e-9)
-        rho = torch.einsum("m,mr,mc->rc", self.area, gy, gx) / (self.gw * self.gh)
-        return softtopk(torch.clamp(rho - target, min=0.0), tau)
+        return torch.einsum("m,mr,mc->rc", self.area, gy, gx) / (self.gw * self.gh)
 
-    def congestion(self, coord, tau=0.02):
+    def rudy_field(self, coord):
+        """Per-cell RUDY congestion estimate, differentiable."""
         xmin, xmax, ymin, ymax = self._bbox(coord, 0.5 * self.gw)
         Wn = torch.clamp(xmax - xmin, min=self.gw); Hn = torch.clamp(ymax - ymin, min=self.gh)
         dnet = (1.0 / Wn + 1.0 / Hn) * self.nw
@@ -125,8 +125,16 @@ class DifferentiablePlacer:
                torch.sigmoid((xmax[:, None] - self.cxs[None]) / self.gw)
         covy = torch.sigmoid((self.cys[None] - ymin[:, None]) / self.gh) * \
                torch.sigmoid((ymax[:, None] - self.cys[None]) / self.gh)
-        R = torch.einsum("n,nr,nc->rc", dnet, covy, covx)
-        return softtopk(R, tau)
+        return torch.einsum("n,nr,nc->rc", dnet, covy, covx)
+
+    def density(self, coord, tau=0.05, target=None, topk="softmax"):
+        target = self.util if target is None else target
+        over = torch.clamp(self.density_field(coord) - target, min=0.0)
+        return lapsum_topk_mean(over, 0.10, tau) if topk == "lapsum" else softtopk(over, tau)
+
+    def congestion(self, coord, tau=0.02, topk="softmax"):
+        R = self.rudy_field(coord)
+        return lapsum_topk_mean(R, 0.05, tau) if topk == "lapsum" else softtopk(R, tau)
 
     # ---- generic optimizer over any differentiable loss ----
     def place(self, loss_fn, pos0=None, iters=500, lr=0.05, logf=print):
@@ -164,15 +172,16 @@ def anneal(t, lo, hi, geometric=False):
     return lo * (hi / lo) ** t if geometric else lo + (hi - lo) * t
 
 
-def proxy_loss(gamma_hi_mult=8.0, lam_d0=0.3, lam_d1=2.0, lam_c=1e-3,
-               tau_d=0.05, tau_c=0.02, target=None):
+def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
+               tau_d=0.05, tau_c=0.02, target=0.8, topk="softmax"):
     """Default objective = challenge proxy, with gamma and density-weight
-    annealing over t. Returns a loss_fn(placer, coord, t)."""
+    annealing over t. `topk` selects the soft-top-k operator ('softmax' or the
+    faithful 'lapsum'). Returns a loss_fn(placer, coord, t)."""
     def loss(P, coord, t):
         gamma = anneal(t, P.gw * gamma_hi_mult, P.gw, geometric=True)  # smooth -> sharp
         lam_d = anneal(t, lam_d0, lam_d1)                              # cluster -> spread
         wl = P.wirelength(coord, gamma)
-        de = P.density(coord, tau=tau_d, target=target)
-        co = P.congestion(coord, tau=tau_c) if lam_c else 0.0
+        de = P.density(coord, tau=tau_d, target=target, topk=topk)
+        co = P.congestion(coord, tau=tau_c, topk=topk) if lam_c else 0.0
         return wl + lam_d * de + lam_c * co
     return loss

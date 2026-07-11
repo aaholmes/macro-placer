@@ -127,6 +127,30 @@ class DifferentiablePlacer:
                torch.sigmoid((ymax[:, None] - self.cys[None]) / self.gh)
         return torch.einsum("n,nr,nc->rc", dnet, covy, covx)
 
+    def hard_overlap(self, coord):
+        """Sum of squared PENETRATION DEPTHS over hard-hard macro pairs (the
+        min-axis separation a legalizer would translate). Differentiable; zero
+        iff the hard placement is legal. Soft macros excluded (may overlap)."""
+        nh = self.nh
+        x = coord[:nh, 0]; y = coord[:nh, 1]
+        dx = (x[:, None] - x[None, :]).abs()
+        dy = (y[:, None] - y[None, :]).abs()
+        penx = torch.clamp((self.hw[:nh, None] + self.hw[None, :nh]) - dx, min=0.0)
+        peny = torch.clamp((self.hh[:nh, None] + self.hh[None, :nh]) - dy, min=0.0)
+        pen = torch.minimum(penx, peny)                 # penetration depth
+        mask = torch.triu(torch.ones(nh, nh, device=self.dev), 1)
+        return ((pen ** 2) * mask).sum()
+
+    def hard_overlap_count(self, coord):
+        """(non-diff) number of strictly-overlapping hard pairs, for reporting."""
+        nh = self.nh
+        with torch.no_grad():
+            x = coord[:nh, 0]; y = coord[:nh, 1]
+            ox = (self.hw[:nh, None] + self.hw[None, :nh]) - (x[:, None] - x[None, :]).abs()
+            oy = (self.hh[:nh, None] + self.hh[None, :nh]) - (y[:, None] - y[None, :]).abs()
+            m = ((ox > 0) & (oy > 0)) & torch.triu(torch.ones(nh, nh, device=self.dev), 1).bool()
+            return int(m.sum())
+
     def density(self, coord, tau=0.05, target=None, topk="softmax"):
         target = self.util if target is None else target
         over = torch.clamp(self.density_field(coord) - target, min=0.0)
@@ -173,15 +197,23 @@ def anneal(t, lo, hi, geometric=False):
 
 
 def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
-               tau_d=0.05, tau_c=0.02, target=0.8, topk="softmax"):
-    """Default objective = challenge proxy, with gamma and density-weight
-    annealing over t. `topk` selects the soft-top-k operator ('softmax' or the
-    faithful 'lapsum'). Returns a loss_fn(placer, coord, t)."""
+               lam_ov0=0.0, lam_ov1=0.0, tau_d=0.05, tau_c=0.02, target=0.8,
+               topk="softmax"):
+    """Default objective = challenge proxy, with annealing over t:
+      gamma  (WL smoothing) large->small,  lam_d (density) small->large,
+      lam_ov (hard-overlap penalty, Form A) small->large so macros pass through
+             early and become legal by the end (legalizer-free).
+    `topk` selects the soft-top-k operator ('softmax' | 'lapsum')."""
     def loss(P, coord, t):
-        gamma = anneal(t, P.gw * gamma_hi_mult, P.gw, geometric=True)  # smooth -> sharp
-        lam_d = anneal(t, lam_d0, lam_d1)                              # cluster -> spread
+        gamma = anneal(t, P.gw * gamma_hi_mult, P.gw, geometric=True)
+        lam_d = anneal(t, lam_d0, lam_d1)
         wl = P.wirelength(coord, gamma)
         de = P.density(coord, tau=tau_d, target=target, topk=topk)
-        co = P.congestion(coord, tau=tau_c, topk=topk) if lam_c else 0.0
-        return wl + lam_d * de + lam_c * co
+        L = wl + lam_d * de
+        if lam_c:
+            L = L + lam_c * P.congestion(coord, tau=tau_c, topk=topk)
+        if lam_ov1 or lam_ov0:
+            lam_ov = anneal(t, max(lam_ov0, 1e-9), max(lam_ov1, 1e-9), geometric=True)
+            L = L + lam_ov * P.hard_overlap(coord)
+        return L
     return loss

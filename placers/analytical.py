@@ -228,7 +228,7 @@ def anneal(t, lo, hi, geometric=False):
 
 def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
                lam_ov0=0.0, lam_ov1=0.0, tau_d=0.05, tau_c=0.02, target=0.8,
-               topk="softmax", legalize_steps=0):
+               topk="softmax", legalize_steps=0, lam_disp=0.0):
     """Default objective = challenge proxy, with annealing over t:
       gamma  (WL smoothing) large->small,  lam_d (density) small->large,
       lam_ov (hard-overlap penalty, Form A) small->large so macros pass through
@@ -236,6 +236,7 @@ def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
     `topk` selects the soft-top-k operator ('softmax' | 'lapsum')."""
     def loss(P, coord, t):
         c = P.legalize_soft(coord, steps=legalize_steps) if legalize_steps else coord
+        disp = lam_disp * ((c[:P.nh] - coord[:P.nh]) ** 2).sum() if (legalize_steps and lam_disp) else 0.0
         gamma = anneal(t, P.gw * gamma_hi_mult, P.gw, geometric=True)
         lam_d = anneal(t, lam_d0, lam_d1)
         wl = P.wirelength(c, gamma)
@@ -246,5 +247,5 @@ def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
         if lam_ov1 or lam_ov0:
             lam_ov = anneal(t, max(lam_ov0, 1e-9), max(lam_ov1, 1e-9), geometric=True)
             L = L + lam_ov * P.hard_overlap(coord)
-        return L
+        return L + disp
     return loss

@@ -83,6 +83,10 @@ class DifferentiablePlacer:
         self.util = float((sz[:, 0] * sz[:, 1]).sum() / (self.W * self.H))
         self.cxs = torch.arange(self.gc, device=d, dtype=torch.float32) * self.gw + self.gw / 2
         self.cys = torch.arange(self.gr, device=d, dtype=torch.float32) * self.gh + self.gh / 2
+        # orientation (Klein-4) support: pin offsets flip sign per macro orientation
+        self.base_off = self.off.clone()
+        self._orient_sign = torch.tensor([[1., 1.], [-1., 1.], [1., -1.], [-1., -1.]], device=d)
+        self._hard_pin = (self.owner >= 0) & (self.owner < self.nh)
         # spectral Poisson operator (ePlace electrostatics): inv Laplacian eigenvalues
         u = torch.fft.fftfreq(self.gc, d=self.gw, device=d) * 2 * math.pi
         v = torch.fft.fftfreq(self.gr, d=self.gh, device=d) * 2 * math.pi
@@ -210,6 +214,48 @@ class DifferentiablePlacer:
         return lapsum_topk_mean(R, 0.05, tau) if topk == "lapsum" else softtopk(R, tau)
 
     # ---- generic optimizer over any differentiable loss ----
+    def set_orientations(self, orient):
+        """Apply per-hard-macro Klein-4 orientation by sign-flipping pin offsets.
+        orient: int array [nh] in {0:N,1:FN,2:FS,3:S}. Updates self.off."""
+        self.orient = np.asarray(orient)
+        o = torch.as_tensor(self.orient, device=self.dev, dtype=torch.long)
+        signs = torch.ones_like(self.base_off)
+        owner_h = self.owner[self._hard_pin]
+        signs[self._hard_pin] = self._orient_sign[o[owner_h]]
+        self.off = self.base_off * signs
+
+    def place_with_orientation(self, loss_fn, fe, pos0=None, iters=1500, lr=0.1,
+                               orient_every=300, logf=print):
+        """Block coordinate descent (idea C): GPU gradient on positions, with an
+        exact greedy orientation pass (via fe.optimize_flips) interleaved every
+        `orient_every` steps and synced back to the GPU. Positions optimized
+        continuously; rotations applied only when they improve the true proxy."""
+        from placers.local_search import optimize_flips
+        self.set_orientations(np.zeros(self.nh, int))
+        if pos0 is None:
+            g = torch.Generator(device="cpu").manual_seed(0)
+            c0 = torch.rand(self.b.num_macros, 2, generator=g)
+            c0[:, 0] = c0[:, 0] * (self.W - 2) + 1; c0[:, 1] = c0[:, 1] * (self.H - 2) + 1
+            coord = c0.to(self.dev).requires_grad_(True)
+        else:
+            coord = torch.tensor(np.asarray(pos0, np.float32)[:, :2], device=self.dev, requires_grad=True)
+        opt = torch.optim.Adam([coord], lr=lr)
+        for it in range(iters):
+            t = it / iters
+            opt.zero_grad(); loss_fn(self, coord, t).backward(); opt.step()
+            with torch.no_grad():
+                coord[:, 0].clamp_(self.hw, self.W - self.hw)
+                coord[:, 1].clamp_(self.hh, self.H - self.hh)
+            if it and it % orient_every == 0:
+                pos = coord.detach().cpu().numpy().astype(np.float64)
+                _, orient, _ = optimize_flips(fe, pos, sweeps=2, logf=lambda *a: None)
+                self.set_orientations(orient[:self.nh])
+                if logf:
+                    logf(f"  it={it} oriented ({int((orient[:self.nh]!=0).sum())} flipped)")
+        out = np.zeros((self.b.num_macros, 2)) if pos0 is None else np.asarray(pos0, np.float64)
+        out[:, :2] = coord.detach().cpu().numpy()
+        return out, self.orient if hasattr(self, "orient") else None
+
     def place(self, loss_fn, pos0=None, iters=500, lr=0.05, logf=print):
         """Adam gradient descent on loss_fn(self, coord, t), t in [0,1].
         pos0=None -> spread start (from-scratch). Returns [N,2] positions."""

@@ -228,7 +228,8 @@ def anneal(t, lo, hi, geometric=False):
 
 def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
                lam_ov0=0.0, lam_ov1=0.0, tau_d=0.05, tau_c=0.02, target=0.8,
-               topk="softmax", legalize_steps=0, lam_disp=0.0):
+               topk="softmax", legalize_steps=0, lam_disp=0.0,
+               lam_wl0=1.0, lam_wl1=1.0):
     """Default objective = challenge proxy, with annealing over t:
       gamma  (WL smoothing) large->small,  lam_d (density) small->large,
       lam_ov (hard-overlap penalty, Form A) small->large so macros pass through
@@ -239,9 +240,10 @@ def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
         disp = lam_disp * ((c[:P.nh] - coord[:P.nh]) ** 2).sum() if (legalize_steps and lam_disp) else 0.0
         gamma = anneal(t, P.gw * gamma_hi_mult, P.gw, geometric=True)
         lam_d = anneal(t, lam_d0, lam_d1)
+        lam_wl = anneal(t, max(lam_wl0, 1e-9), max(lam_wl1, 1e-9), geometric=True)  # spread-first: 0->1
         wl = P.wirelength(c, gamma)
         de = P.density(c, tau=tau_d, target=target, topk=topk)
-        L = wl + lam_d * de
+        L = lam_wl * wl + lam_d * de
         if lam_c:
             L = L + lam_c * P.congestion(c, tau=tau_c, topk=topk)
         if lam_ov1 or lam_ov0:

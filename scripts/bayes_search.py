@@ -23,7 +23,7 @@ from placers.legalizer import legalize
 from placers.analytical import DifferentiablePlacer, proxy_loss
 
 CHAL = "/home/laz/partcl/macro-place-challenge-2026"
-BENCHES = ["ibm01", "ibm09", "ibm13"]          # easy/low/mid mix
+BENCHES = ["ibm01", "ibm13", "ibm17"]          # easy / mid / hard (congestion-heavy)
 ENV = {}
 REF = {}
 for nm in BENCHES:
@@ -75,7 +75,7 @@ def objective(trial):
         lam_wl0=trial.suggest_float("lam_wl0", 0.02, 1.0, log=True),   # <1 = spread-first
         target=trial.suggest_float("target", 0.6, 1.0),
         lr=trial.suggest_float("lr", 0.02, 0.3, log=True),
-        iters=trial.suggest_int("iters", 1000, 2000, step=250),
+        iters=trial.suggest_int("iters", 1000, 5000, step=250),
         lsteps=trial.suggest_categorical("lsteps", [0, 8, 15]),
     )
     hp["lam_disp"] = trial.suggest_float("lam_disp", 1e-3, 1.0, log=True) if hp["lsteps"] else 0.0
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     storage = "sqlite:////home/laz/partcl/my-macro-placer/notes/bayes.db"
     study = optuna.create_study(study_name="diffplace", storage=storage,
                                 direction="minimize", load_if_exists=True,
-                                sampler=optuna.samplers.TPESampler(n_startup_trials=40, seed=0))
+                                sampler=optuna.samplers.TPESampler(n_startup_trials=18, seed=0))
     if len(study.trials) == 0:   # anchor with best-known configs (~1.13 region)
         study.enqueue_trial({"dmode": "overflow", "lam_d_end_o": 0.05, "topk": "lapsum",
             "lam_d_ratio": 0.05, "use_cong": 0, "gamma": 10.0, "tau_d": 0.05, "tau_c": 0.02,

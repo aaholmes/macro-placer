@@ -83,6 +83,13 @@ class DifferentiablePlacer:
         self.util = float((sz[:, 0] * sz[:, 1]).sum() / (self.W * self.H))
         self.cxs = torch.arange(self.gc, device=d, dtype=torch.float32) * self.gw + self.gw / 2
         self.cys = torch.arange(self.gr, device=d, dtype=torch.float32) * self.gh + self.gh / 2
+        # spectral Poisson operator (ePlace electrostatics): inv Laplacian eigenvalues
+        u = torch.fft.fftfreq(self.gc, d=self.gw, device=d) * 2 * math.pi
+        v = torch.fft.fftfreq(self.gr, d=self.gh, device=d) * 2 * math.pi
+        k2 = (u[None, :] ** 2 + v[:, None] ** 2)
+        k2[0, 0] = 1.0
+        inv = 1.0 / k2; inv[0, 0] = 0.0          # zero the DC (net-charge) mode
+        self._inv_k2 = inv
 
     # ---- pin positions & smooth per-net bbox ----
     def _pin_xy(self, coord):
@@ -181,7 +188,19 @@ class DifferentiablePlacer:
             c = torch.stack([cx, cy], dim=1)
         return c
 
-    def density(self, coord, tau=0.05, target=None, topk="softmax"):
+    def density_electrostatic(self, coord):
+        """ePlace electrostatic density energy: charge=area, solve Poisson via
+        FFT for potential psi, energy = sum(rho*psi). Its gradient is the field
+        that ACTIVELY pushes modules from high- to low-density (toward uniform)
+        -- a real spreader, unlike the passive overflow penalty. Differentiable."""
+        rho = self.density_field(coord)
+        rho = rho - rho.mean()                          # neutralize net charge
+        psi = torch.fft.ifft2(torch.fft.fft2(rho) * self._inv_k2).real
+        return (rho * psi).sum()
+
+    def density(self, coord, tau=0.05, target=None, topk="softmax", mode="overflow"):
+        if mode == "electrostatic":
+            return self.density_electrostatic(coord)
         target = self.util if target is None else target
         over = torch.clamp(self.density_field(coord) - target, min=0.0)
         return lapsum_topk_mean(over, 0.10, tau) if topk == "lapsum" else softtopk(over, tau)
@@ -229,7 +248,7 @@ def anneal(t, lo, hi, geometric=False):
 def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
                lam_ov0=0.0, lam_ov1=0.0, tau_d=0.05, tau_c=0.02, target=0.8,
                topk="softmax", legalize_steps=0, lam_disp=0.0,
-               lam_wl0=1.0, lam_wl1=1.0):
+               lam_wl0=1.0, lam_wl1=1.0, dmode="overflow"):
     """Default objective = challenge proxy, with annealing over t:
       gamma  (WL smoothing) large->small,  lam_d (density) small->large,
       lam_ov (hard-overlap penalty, Form A) small->large so macros pass through
@@ -242,7 +261,7 @@ def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
         lam_d = anneal(t, lam_d0, lam_d1)
         lam_wl = anneal(t, max(lam_wl0, 1e-9), max(lam_wl1, 1e-9), geometric=True)  # spread-first: 0->1
         wl = P.wirelength(c, gamma)
-        de = P.density(c, tau=tau_d, target=target, topk=topk)
+        de = P.density(c, tau=tau_d, target=target, topk=topk, mode=dmode)
         L = lam_wl * wl + lam_d * de
         if lam_c:
             L = L + lam_c * P.congestion(c, tau=tau_c, topk=topk)

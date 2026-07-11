@@ -6,3 +6,5 @@ notes/checkpoints/
 notes/results/
 notes/*.out
 notes/*.stdout
+notes/bayes.db
+notes/bayes_best.json

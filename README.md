@@ -94,6 +94,16 @@ Differentiable global placement → legalize → greedy polish, applied to all 1
 
 Every benchmark beats the reference; on the easiest designs (ibm01 0.79, ibm09 0.81) we dip below the current leaderboard leader's *average* (0.9507). The 14 held-out designs generalize as well as the 3 used for tuning. Previous approach (greedy from the reference alone) averaged ~1.08; the differentiable global stage supplies a ~4% better basin on top of that.
 
+### Placement layouts
+
+Hard macros as rectangles (color = area); soft cell-clusters as light dots. The reference scatters macros with dead space; ours packs them into a compact, connected arrangement at the same zero-overlap legality.
+
+![ibm01 reference vs ours](notes/fig_layout_ibm01.png)
+
+The differentiable optimization in motion (ibm01): random spread → clustered under the back-loaded schedule → legalized → greedy-polished.
+
+![ibm01 optimization](notes/opt_ibm01.gif)
+
 ---
 
 ## Key findings (the interesting part)

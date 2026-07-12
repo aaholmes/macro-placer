@@ -56,6 +56,68 @@ def evaluate(nm, hp):
     return float(c["proxy_cost"]) + (1.0 if c["overlap_count"] else 0.0)
 
 
+def hp_from_params(p):
+    """Reconstruct the evaluate() hp dict from a stored trial's params."""
+    dmode = p["dmode"]
+    lam_d_end = p.get("lam_d_end_e") if dmode == "electrostatic" else p.get("lam_d_end_o")
+    if p.get("use_cong"):
+        lam_c1 = p["lam_c1"]; lam_c0 = lam_c1 * p["lam_c_startfrac"]
+    else:
+        lam_c0 = lam_c1 = 0.0
+    return dict(dmode=dmode, lam_d_end=lam_d_end, lam_c0=lam_c0, lam_c1=lam_c1,
+                lam_d_ratio=p["lam_d_ratio"], gamma=p["gamma"], tau_d=p["tau_d"],
+                tau_c=p["tau_c"], lam_wl0=p["lam_wl0"], target=p["target"], lr=p["lr"],
+                iters=p["iters"], ramp_p=p["ramp_p"], lsteps=p["lsteps_n"],
+                lam_disp=p.get("lam_disp", 0.0))
+
+
+def evaluate_ms(nm, hp, n_seeds):
+    """Best-of-n_seeds multi-start legalized proxy for one benchmark."""
+    b, plc, fe, P, sz = ENV[nm]
+    loss = proxy_loss(
+        gamma_hi_mult=hp["gamma"], lam_d0=hp["lam_d_end"] * hp["lam_d_ratio"],
+        lam_d1=hp["lam_d_end"], lam_c0=hp["lam_c0"], lam_c1=hp["lam_c1"],
+        tau_d=hp["tau_d"], tau_c=hp["tau_c"], target=hp["target"], topk="lapsum",
+        dmode=hp["dmode"], lam_wl0=hp["lam_wl0"], lam_wl1=1.0, ramp_p=hp["ramp_p"],
+        legalize_steps=hp["lsteps"], lam_disp=hp["lam_disp"])
+
+    def score(p):
+        pp = p.copy()
+        if hp["lsteps"]:
+            pp[:, :2] = P.legalize_soft(torch.tensor(p[:, :2], dtype=torch.float32, device=P.dev),
+                                        steps=hp["lsteps"]).detach().cpu().numpy()
+        lg, _, _ = legalize(pp, sz, b.num_hard_macros, b.canvas_width, b.canvas_height, gap=0.01)
+        c = compute_proxy_cost(torch.tensor(lg, dtype=torch.float32), b, plc)
+        return float(c["proxy_cost"]) + (1.0 if c["overlap_count"] else 0.0)
+
+    _, best = P.place_multistart(loss, score, n_starts=n_seeds, pos0=None,
+                                 iters=hp["iters"], lr=hp["lr"], logf=None)
+    return best
+
+
+def finalize(study, top_k=5, n_seeds=16):
+    """Take the top_k configs, multi-start each (best-of-n_seeds) per benchmark,
+    and report the best -- this is where the 'best of random seeds' pays off."""
+    comp = sorted([t for t in study.trials if t.value is not None], key=lambda t: t.value)[:top_k]
+    print(f"\n=== FINALIZE: multi-start (best-of-{n_seeds}) on top {len(comp)} configs ===", flush=True)
+    best = None
+    for t in comp:
+        hp = hp_from_params(t.params)
+        vals = [evaluate_ms(nm, hp, n_seeds) for nm in BENCHES]
+        ratios = [v / REF[nm] for v, nm in zip(vals, BENCHES)]
+        rm = float(np.mean(ratios))
+        print(f"  trial {t.number}: search={t.value:.4f} -> multistart ratio-mean={rm:.4f} "
+              f"per-bench-ratio={[round(x,3) for x in ratios]}", flush=True)
+        if best is None or rm < best["ratio_mean"]:
+            best = {"ratio_mean": rm, "per_bench_proxy": vals, "per_bench_ratio": ratios,
+                    "params": t.params, "trial": t.number, "n_seeds": n_seeds}
+    json.dump({"benches": BENCHES, "reference": REF, **best},
+              open("/home/laz/partcl/my-macro-placer/notes/bayes_final.json", "w"), indent=2)
+    print(f"FINAL BEST ratio-mean={best['ratio_mean']:.4f} (<1 beats ref) "
+          f"per-bench {[round(x,3) for x in best['per_bench_ratio']]}", flush=True)
+    return best
+
+
 def objective(trial):
     dmode = trial.suggest_categorical("dmode", ["overflow", "electrostatic"])
     # density weight scale differs by ~100x between modes; give each its own range
@@ -123,7 +185,10 @@ if __name__ == "__main__":
         if time.time() > deadline:
             study.stop()
 
-    study.optimize(objective, callbacks=[cb], n_jobs=1)
-    b = study.best_trial
-    print(f"DONE best ratio-mean={b.value:.4f} (<1 beats ref)  per-bench {b.user_attrs.get('ratios')}"
-          f"  params={b.params}", flush=True)
+    if "--finalize" in sys.argv:          # run multi-start on the existing study only
+        finalize(study, top_k=5, n_seeds=16)
+    else:
+        study.optimize(objective, callbacks=[cb], n_jobs=1)
+        b = study.best_trial
+        print(f"DONE search best ratio-mean={b.value:.4f}  per-bench {b.user_attrs.get('ratios')}", flush=True)
+        finalize(study, top_k=5, n_seeds=16)   # multi-start the winners

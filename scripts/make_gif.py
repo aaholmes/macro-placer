@@ -15,6 +15,7 @@ sys.path.insert(0, "/home/laz/partcl/my-macro-placer")
 from macro_place.loader import load_benchmark_from_dir
 from placers.fast_eval import FastEval
 from placers.legalizer import legalize
+from placers.local_search import optimize_fast
 from placers.analytical import DifferentiablePlacer, proxy_loss
 
 CHAL = "/home/laz/partcl/macro-place-challenge-2026"
@@ -62,11 +63,14 @@ for it in range(iters):
 final = coord.detach().cpu().numpy()
 frames.append((final.copy(), f"global placement — step {iters}/{iters}"))
 
-# --- closing frames: legalized, then greedy-polished ---
+# --- closing frames: legalize THIS run, then greedy-polish THIS placement, so the
+# animation stays one continuous trajectory (soft-only polish leaves hard macros put) ---
 legal, _, _ = legalize(final, sz, nh, b.canvas_width, b.canvas_height, gap=0.01)
 frames.append((legal.copy(), "legalized (zero overlap)"))
-if os.path.exists(f"{NOTES}/polish/{nm}.npz"):
-    frames.append((np.load(f"{NOTES}/polish/{nm}.npz")["placement"], "greedy-polished (final)"))
+polished, _ = optimize_fast(fe, legal, iters=200000, seed=0, T0=0.0,
+                            move_hard=False, move_soft=True, refresh=200000,
+                            log_every=200001, logf=lambda *a: None)
+frames.append((polished.copy(), "greedy-polished (final)"))
 
 # --- render frames to a GIF ---
 areas = sz[:nh, 0] * sz[:nh, 1]

@@ -256,11 +256,12 @@ class DifferentiablePlacer:
         out[:, :2] = coord.detach().cpu().numpy()
         return out, self.orient if hasattr(self, "orient") else None
 
-    def place(self, loss_fn, pos0=None, iters=500, lr=0.05, logf=print):
+    def place(self, loss_fn, pos0=None, iters=500, lr=0.05, seed=0, logf=print):
         """Adam gradient descent on loss_fn(self, coord, t), t in [0,1].
-        pos0=None -> spread start (from-scratch). Returns [N,2] positions."""
+        pos0=None -> spread start (from-scratch) using `seed` for the random init.
+        Returns [N,2] positions."""
         if pos0 is None:
-            g = torch.Generator(device="cpu").manual_seed(0)
+            g = torch.Generator(device="cpu").manual_seed(seed)
             c0 = torch.rand(self.b.num_macros, 2, generator=g)
             c0[:, 0] = c0[:, 0] * (self.W - 2) + 1; c0[:, 1] = c0[:, 1] * (self.H - 2) + 1
             coord = c0.to(self.dev).requires_grad_(True)
@@ -285,6 +286,22 @@ class DifferentiablePlacer:
             out = np.zeros((self.b.num_macros, 2))
         out[:, :2] = coord.detach().cpu().numpy()
         return out
+
+    def place_multistart(self, loss_fn, score_fn, n_starts=8, pos0=None, iters=500,
+                         lr=0.05, logf=None):
+        """Run `place` from n_starts different random inits (seeds 0..n_starts-1)
+        and keep the one with the lowest score_fn(positions) (e.g. legalized
+        proxy). Cheap on GPU; directly exploits placement-quality variance across
+        random starts. Returns (best_pos, best_score)."""
+        best_pos, best_score = None, float("inf")
+        for s in range(n_starts):
+            p = self.place(loss_fn, pos0=pos0, iters=iters, lr=lr, seed=s, logf=None)
+            sc = float(score_fn(p))
+            if sc < best_score:
+                best_score, best_pos = sc, p
+            if logf:
+                logf(f"  start {s}: score={sc:.4f} (best {best_score:.4f})")
+        return best_pos, best_score
 
 
 def anneal(t, lo, hi, geometric=False):

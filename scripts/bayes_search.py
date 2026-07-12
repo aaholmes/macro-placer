@@ -42,9 +42,9 @@ def evaluate(nm, hp):
     b, plc, fe, P, sz = ENV[nm]
     loss = proxy_loss(
         gamma_hi_mult=hp["gamma"], lam_d0=hp["lam_d_end"] * hp["lam_d_ratio"],
-        lam_d1=hp["lam_d_end"], lam_c=hp["lam_c"], tau_d=hp["tau_d"], tau_c=hp["tau_c"],
-        target=hp["target"], topk=hp["topk"], dmode=hp["dmode"],
-        lam_wl0=hp["lam_wl0"], lam_wl1=1.0,
+        lam_d1=hp["lam_d_end"], lam_c0=hp["lam_c0"], lam_c1=hp["lam_c1"],
+        tau_d=hp["tau_d"], tau_c=hp["tau_c"], target=hp["target"], topk="lapsum",
+        dmode=hp["dmode"], lam_wl0=hp["lam_wl0"], lam_wl1=1.0, ramp_p=hp["ramp_p"],
         legalize_steps=hp["lsteps"], lam_disp=hp["lam_disp"])
     out = P.place(loss, pos0=None, iters=hp["iters"], lr=hp["lr"], logf=None)
     if hp["lsteps"]:
@@ -63,12 +63,15 @@ def objective(trial):
         lam_d_end = trial.suggest_float("lam_d_end_e", 5e-5, 2e-2, log=True)
     else:
         lam_d_end = trial.suggest_float("lam_d_end_o", 5e-3, 0.3, log=True)
+    # congestion: annealed lam_c0 -> lam_c1 (start can be 0, ramp in late via ramp_p)
+    if trial.suggest_categorical("use_cong", [0, 1]):
+        lam_c1 = trial.suggest_float("lam_c1", 1e-5, 5e-3, log=True)
+        lam_c0 = lam_c1 * trial.suggest_float("lam_c_startfrac", 0.0, 1.0)  # 0 => ramp from 0
+    else:
+        lam_c0 = lam_c1 = 0.0
     hp = dict(
-        dmode=dmode, lam_d_end=lam_d_end,
-        topk=trial.suggest_categorical("topk", ["softmax", "lapsum"]),
+        dmode=dmode, lam_d_end=lam_d_end, lam_c0=lam_c0, lam_c1=lam_c1,
         lam_d_ratio=trial.suggest_float("lam_d_ratio", 0.02, 1.0, log=True),
-        lam_c=(trial.suggest_float("lam_c", 1e-5, 5e-3, log=True)
-               if trial.suggest_categorical("use_cong", [0, 1]) else 0.0),
         gamma=trial.suggest_float("gamma", 1.5, 30.0, log=True),
         tau_d=trial.suggest_float("tau_d", 0.01, 0.5, log=True),
         tau_c=trial.suggest_float("tau_c", 0.005, 0.1, log=True),
@@ -76,16 +79,20 @@ def objective(trial):
         target=trial.suggest_float("target", 0.6, 1.0),
         lr=trial.suggest_float("lr", 0.02, 0.3, log=True),
         iters=trial.suggest_int("iters", 1000, 5000, step=250),
-        lsteps=trial.suggest_categorical("lsteps", [0, 8, 15]),
+        ramp_p=trial.suggest_float("ramp_p", 0.5, 4.0, log=True),      # >1 = delay ramps
+        lsteps=trial.suggest_int("lsteps_n", 0, 16),                   # ordered; 0 = off
     )
     hp["lam_disp"] = trial.suggest_float("lam_disp", 1e-3, 1.0, log=True) if hp["lsteps"] else 0.0
     try:
         vals = [evaluate(nm, hp) for nm in BENCHES]
     except Exception as e:
         return 10.0
-    m = float(np.mean(vals))
+    # DIFFICULTY-NORMALIZED objective: mean of ratios ours/reference, so no single
+    # (hard, high-magnitude) benchmark dominates. <1.0 => beats the reference.
+    ratios = [v / REF[nm] for v, nm in zip(vals, BENCHES)]
     trial.set_user_attr("per_bench", vals)
-    return m
+    trial.set_user_attr("ratios", ratios)
+    return float(np.mean(ratios))
 
 
 if __name__ == "__main__":
@@ -94,25 +101,29 @@ if __name__ == "__main__":
                                 direction="minimize", load_if_exists=True,
                                 sampler=optuna.samplers.TPESampler(n_startup_trials=18, seed=0))
     if len(study.trials) == 0:   # anchor with best-known configs (~1.13 region)
-        study.enqueue_trial({"dmode": "overflow", "lam_d_end_o": 0.05, "topk": "lapsum",
-            "lam_d_ratio": 0.05, "use_cong": 0, "gamma": 10.0, "tau_d": 0.05, "tau_c": 0.02,
-            "lam_wl0": 1.0, "target": 0.8, "lr": 0.1, "iters": 1500, "lsteps": 0})
-        study.enqueue_trial({"dmode": "electrostatic", "lam_d_end_e": 0.002, "topk": "lapsum",
-            "lam_d_ratio": 0.1, "use_cong": 0, "gamma": 10.0, "tau_d": 0.05, "tau_c": 0.02,
-            "lam_wl0": 1.0, "target": 0.8, "lr": 0.1, "iters": 1500, "lsteps": 0})
+        study.enqueue_trial({"dmode": "overflow", "lam_d_end_o": 0.05, "lam_d_ratio": 0.05,
+            "use_cong": 0, "gamma": 10.0, "tau_d": 0.05, "tau_c": 0.02, "lam_wl0": 1.0,
+            "target": 0.8, "lr": 0.1, "iters": 1500, "ramp_p": 1.0, "lsteps_n": 0})
+        study.enqueue_trial({"dmode": "electrostatic", "lam_d_end_e": 0.002, "lam_d_ratio": 0.1,
+            "use_cong": 0, "gamma": 10.0, "tau_d": 0.05, "tau_c": 0.02, "lam_wl0": 1.0,
+            "target": 0.8, "lr": 0.1, "iters": 1500, "ramp_p": 1.0, "lsteps_n": 0})
     t0 = time.time(); deadline = t0 + float(os.environ.get("HOURS", "8")) * 3600
 
     def cb(study, trial):
-        if trial.number % 20 == 0:
+        if trial.number % 10 == 0:
             b = study.best_trial
-            print(f"[{time.strftime('%H:%M:%S')}] trial {trial.number}: "
-                  f"best={b.value:.4f} (ref {REF_MEAN:.4f}) params={b.params}", flush=True)
-            json.dump({"best": b.value, "ref": REF_MEAN, "params": b.params,
-                       "per_bench": b.user_attrs.get("per_bench"), "n": trial.number},
+            print(f"[{time.strftime('%H:%M:%S')}] trial {trial.number}: best ratio-mean="
+                  f"{b.value:.4f} (<1 beats ref) per-bench-ratio="
+                  f"{[round(x,3) for x in b.user_attrs.get('ratios') or []]}", flush=True)
+            json.dump({"best_ratio_mean": b.value, "benches": BENCHES,
+                       "per_bench_proxy": b.user_attrs.get("per_bench"),
+                       "per_bench_ratio": b.user_attrs.get("ratios"),
+                       "reference": REF, "params": b.params, "n": trial.number},
                       open("/home/laz/partcl/my-macro-placer/notes/bayes_best.json", "w"), indent=2)
         if time.time() > deadline:
             study.stop()
 
     study.optimize(objective, callbacks=[cb], n_jobs=1)
     b = study.best_trial
-    print(f"DONE best={b.value:.4f} vs ref {REF_MEAN:.4f}  params={b.params}", flush=True)
+    print(f"DONE best ratio-mean={b.value:.4f} (<1 beats ref)  per-bench {b.user_attrs.get('ratios')}"
+          f"  params={b.params}", flush=True)

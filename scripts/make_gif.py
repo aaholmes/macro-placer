@@ -77,7 +77,7 @@ areas = sz[:nh, 0] * sz[:nh, 1]
 norm = mcolors.LogNorm(vmin=areas.min(), vmax=areas.max())
 imgs = []
 for pos, label in frames:
-    fig, ax = plt.subplots(figsize=(5, 5))
+    fig, ax = plt.subplots(figsize=(5, 5.2), constrained_layout=True)
     ax.add_patch(Rectangle((0, 0), b.canvas_width, b.canvas_height, fill=False, ec="black", lw=1.2))
     ax.scatter(pos[nh:, 0], pos[nh:, 1], s=2, c="0.7", alpha=0.35)
     for i in range(nh):
@@ -87,7 +87,7 @@ for pos, label in frames:
     ax.set_xlim(-1, b.canvas_width + 1); ax.set_ylim(-1, b.canvas_height + 1)
     ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
     ax.set_title(f"{nm}: {label}", fontsize=11)
-    fig.tight_layout(); fig.canvas.draw()
+    fig.canvas.draw()
     imgs.append(Image.fromarray(np.asarray(fig.canvas.buffer_rgba())[..., :3].copy()))
     plt.close(fig)
 

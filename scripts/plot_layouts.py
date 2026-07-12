@@ -49,5 +49,5 @@ for nm in benches:
     fig, ax = plt.subplots(1, 2, figsize=(11, 5.6))
     draw(ax[0], bench, ref, sz, nh, f"{nm} — reference (proxy {pr:.3f})")
     draw(ax[1], bench, best, sz, nh, f"{nm} — ours (proxy {pb:.3f}, {pb/pr:.2f}× ref)")
-    fig.tight_layout(); fig.savefig(f"{NOTES}/fig_layout_{nm}.png", dpi=115)
+    fig.savefig(f"{NOTES}/fig_layout_{nm}.png", dpi=115, bbox_inches="tight", pad_inches=0.3)
     print(f"saved fig_layout_{nm}.png  ref={pr:.3f} ours={pb:.3f} ratio={pb/pr:.3f}")

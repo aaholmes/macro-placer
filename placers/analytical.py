@@ -292,27 +292,33 @@ def anneal(t, lo, hi, geometric=False):
 
 
 def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
-               lam_ov0=0.0, lam_ov1=0.0, tau_d=0.05, tau_c=0.02, target=0.8,
-               topk="softmax", legalize_steps=0, lam_disp=0.0,
-               lam_wl0=1.0, lam_wl1=1.0, dmode="overflow"):
-    """Default objective = challenge proxy, with annealing over t:
-      gamma  (WL smoothing) large->small,  lam_d (density) small->large,
-      lam_ov (hard-overlap penalty, Form A) small->large so macros pass through
-             early and become legal by the end (legalizer-free).
+               lam_c0=None, lam_c1=None, lam_ov0=0.0, lam_ov1=0.0,
+               tau_d=0.05, tau_c=0.02, target=0.8, topk="softmax",
+               legalize_steps=0, lam_disp=0.0, lam_wl0=1.0, lam_wl1=1.0,
+               dmode="overflow", ramp_p=1.0):
+    """Default objective = challenge proxy, with annealing over t (all schedules
+    warped by t -> t**ramp_p, so ramp_p>1 delays ramps to late in the run):
+      gamma (WL smoothing) large->small, lam_d (density) low->high,
+      lam_wl (WL weight) lam_wl0->1 (spread-first if <1),
+      lam_c (congestion) lam_c0->lam_c1 (start can be 0, ramp in late).
     `topk` selects the soft-top-k operator ('softmax' | 'lapsum')."""
+    lc0 = lam_c if lam_c0 is None else lam_c0     # back-compat: constant lam_c
+    lc1 = lam_c if lam_c1 is None else lam_c1
     def loss(P, coord, t):
+        te = t ** ramp_p
         c = P.legalize_soft(coord, steps=legalize_steps) if legalize_steps else coord
         disp = lam_disp * ((c[:P.nh] - coord[:P.nh]) ** 2).sum() if (legalize_steps and lam_disp) else 0.0
-        gamma = anneal(t, P.gw * gamma_hi_mult, P.gw, geometric=True)
-        lam_d = anneal(t, lam_d0, lam_d1)
-        lam_wl = anneal(t, max(lam_wl0, 1e-9), max(lam_wl1, 1e-9), geometric=True)  # spread-first: 0->1
+        gamma = anneal(te, P.gw * gamma_hi_mult, P.gw, geometric=True)
+        lam_d = anneal(te, lam_d0, lam_d1)
+        lam_wl = anneal(te, max(lam_wl0, 1e-9), max(lam_wl1, 1e-9), geometric=True)
         wl = P.wirelength(c, gamma)
         de = P.density(c, tau=tau_d, target=target, topk=topk, mode=dmode)
         L = lam_wl * wl + lam_d * de
-        if lam_c:
-            L = L + lam_c * P.congestion(c, tau=tau_c, topk=topk)
+        if lc0 or lc1:
+            lam_c_t = lc0 + (lc1 - lc0) * te       # linear -> allows 0 start
+            L = L + lam_c_t * P.congestion(c, tau=tau_c, topk=topk)
         if lam_ov1 or lam_ov0:
-            lam_ov = anneal(t, max(lam_ov0, 1e-9), max(lam_ov1, 1e-9), geometric=True)
+            lam_ov = anneal(te, max(lam_ov0, 1e-9), max(lam_ov1, 1e-9), geometric=True)
             L = L + lam_ov * P.hard_overlap(coord)
         return L + disp
     return loss

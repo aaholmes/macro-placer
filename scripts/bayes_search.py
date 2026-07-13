@@ -191,4 +191,5 @@ if __name__ == "__main__":
         study.optimize(objective, callbacks=[cb], n_jobs=1)
         b = study.best_trial
         print(f"DONE search best ratio-mean={b.value:.4f}  per-bench {b.user_attrs.get('ratios')}", flush=True)
-        finalize(study, top_k=5, n_seeds=16)   # multi-start the winners
+        if "--finalize-after" in sys.argv:     # opt-in; the full-run does selection now
+            finalize(study, top_k=5, n_seeds=16)

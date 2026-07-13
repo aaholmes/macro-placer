@@ -37,7 +37,7 @@ def hp_from_params(p):
     return dict(dmode=dmode, lam_d_end=lam_d_end, lam_c0=lam_c0, lam_c1=lam_c1,
                 lam_d_ratio=p["lam_d_ratio"], gamma=p["gamma"], tau_d=p["tau_d"],
                 tau_c=p["tau_c"], lam_wl0=p["lam_wl0"], target=p["target"], lr=p["lr"],
-                ramp_p=p["ramp_p"], lsteps=p["lsteps_n"])
+                ramp_p=p["ramp_p"], lsteps=p["lsteps_n"], iters=p["iters"])
 
 
 def build_loss(hp):
@@ -49,7 +49,7 @@ def build_loss(hp):
 
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--iters", type=int, required=True)
+ap.add_argument("--iters", type=int, default=0, help="0 = use each config's own tuned iters")
 ap.add_argument("--topk", type=int, default=5)
 ap.add_argument("--deadline-min", type=float, required=True)
 ap.add_argument("--benches", default=",".join(ALL))
@@ -62,7 +62,8 @@ top = sorted([t for t in study.trials if t.value is not None], key=lambda t: t.v
 configs = [(t.number, hp_from_params(t.params), build_loss(hp_from_params(t.params))) for t in top]
 benches = a.benches.split(",")
 per_bench = a.deadline_min * 60 / len(benches)
-print(f"=== stage A: iters={a.iters} topk={a.topk} (trials {[t.number for t in top]}) "
+print(f"=== stage A: iters={a.iters or 'per-config'} topk={a.topk} "
+      f"(trials {[t.number for t in top]}, their iters {[c[1]['iters'] for c in configs]}) "
       f"per-bench {per_bench/60:.0f}min ===", flush=True)
 
 for nm in benches:
@@ -75,7 +76,8 @@ for nm in benches:
     while time.time() < bdl:
         ci = cnt % len(configs); seed = cnt // len(configs)
         trial, hp, loss = configs[ci]
-        raw = P.place(loss, pos0=None, iters=a.iters, lr=hp["lr"], seed=seed * 101 + ci, logf=None)
+        it = a.iters if a.iters else hp["iters"]
+        raw = P.place(loss, pos0=None, iters=it, lr=hp["lr"], seed=seed * 101 + ci, logf=None)
         if hp["lsteps"]:
             raw[:, :2] = P.legalize_soft(torch.tensor(raw[:, :2], dtype=torch.float32, device=P.dev),
                                          steps=hp["lsteps"]).detach().cpu().numpy()

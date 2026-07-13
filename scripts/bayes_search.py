@@ -140,7 +140,7 @@ def objective(trial):
         lam_wl0=trial.suggest_float("lam_wl0", 0.02, 1.0, log=True),   # <1 = spread-first
         target=trial.suggest_float("target", 0.6, 1.0),
         lr=trial.suggest_float("lr", 0.02, 0.3, log=True),
-        iters=trial.suggest_int("iters", 1000, 5000, step=250),
+        iters=trial.suggest_int("iters", 1000, 30000, step=1000),
         ramp_p=trial.suggest_float("ramp_p", 0.5, 4.0, log=True),      # >1 = delay ramps
         lsteps=trial.suggest_int("lsteps_n", 0, 16),                   # ordered; 0 = off
     )

@@ -74,30 +74,34 @@ def greedy(fe, b, plc, pos, iters=80000):
     return best, float(c["proxy_cost"]), int(c["overlap_count"])
 
 
-def run(nm, hp, rounds, burst_iters):
+def run(nm, hp, rounds, burst_iters, greedy_iters):
     b, plc = load_benchmark_from_dir(f"{CHAL}/external/MacroPlacement/Testcases/ICCAD04/{nm}")
     fe = FastEval(b, plc); P = DifferentiablePlacer(fe); sz = b.macro_sizes.numpy()
     loss = build_loss(hp)
 
-    def legal_greedy(coord):
+    def legal_greedy(coord, iters):
         lg, _, _ = legalize(coord, sz, b.num_hard_macros, b.canvas_width, b.canvas_height, gap=0.01)
-        return greedy(fe, b, plc, lg)
+        return greedy(fe, b, plc, lg, iters=iters)
 
-    # single-pass baseline
+    # Same starting basin (seed 0) for both, and EQUAL TOTAL greedy budget:
+    #   single-pass  = one deep descent of (rounds+1)*greedy_iters
+    #   interleaved  = (rounds+1) short descents of greedy_iters, with diff bursts between
+    # so the only difference is whether greedy can hop basins.
     coord = P.place(loss, pos0=None, iters=hp["iters"], seed=0, logf=None)
-    best, base_cost, _ = legal_greedy(coord)
-    best_cost = base_cost
+    total_greedy = (rounds + 1) * greedy_iters
+    _, sp_cost, _ = legal_greedy(coord, total_greedy)            # single-pass: deep, one basin
+    best, best_cost, _ = legal_greedy(coord, greedy_iters)       # interleaved: short initial descent
     traj = [best_cost]
-    # interleaved loop: cool t_start 0.2 -> 0.8 over rounds (big kicks early)
     for r in range(rounds):
         t_start = 0.2 + 0.6 * (r / max(1, rounds - 1))
         pk = burst(P, loss, best, burst_iters, hp["lr"], t_start, seed=r + 1)
-        cand, cost, ov = legal_greedy(pk)
+        cand, cost, ov = legal_greedy(pk, greedy_iters)
         if ov == 0 and cost < best_cost:
             best, best_cost = cand, cost
         traj.append(best_cost)
-    return dict(benchmark=nm, single_pass=base_cost, interleaved=best_cost,
-                gain=base_cost - best_cost, rounds=rounds, burst=burst_iters,
+    return dict(benchmark=nm, single_pass=sp_cost, interleaved=best_cost,
+                gain=sp_cost - best_cost, rounds=rounds, burst=burst_iters,
+                greedy_iters=greedy_iters, total_greedy=total_greedy,
                 traj=[round(x, 4) for x in traj])
 
 
@@ -106,12 +110,14 @@ if __name__ == "__main__":
     ap.add_argument("--benches", default="ibm01,ibm17")
     ap.add_argument("--rounds", type=int, default=8)
     ap.add_argument("--burst", type=int, default=1500)
+    ap.add_argument("--greedy-iters", type=int, default=10000,
+                    help="greedy iters per descent; single-pass gets (rounds+1)x this (equal total)")
     a = ap.parse_args()
     hp = hp_from_params(json.load(open(f"{ROOT}/notes/bayes_final.json"))["params"])
     out = []
     for nm in a.benches.split(","):
         t0 = time.time()
-        r = run(nm, hp, a.rounds, a.burst)
+        r = run(nm, hp, a.rounds, a.burst, a.greedy_iters)
         out.append(r)
         json.dump(out, open(f"{ROOT}/notes/concurrent_result.json", "w"), indent=2)
         print(f"[{time.strftime('%H:%M:%S')}] {nm}: single-pass={r['single_pass']:.4f} "

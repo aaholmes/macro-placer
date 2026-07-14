@@ -270,7 +270,7 @@ def optimize_flips(fe, pos0, sweeps=4, logf=print):
 
 def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0,
                   hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, move_hard=True,
-                  move_soft=True, refresh=2000, log_every=2000, logf=print):
+                  move_soft=True, refresh=2000, log_every=2000, logf=print, max_accepts=None):
     """Greedy/SA single-move local search using the INCREMENTAL evaluator
     (~55x faster than full recompute). Returns (best_pos, hist)."""
     rng = np.random.default_rng(seed)
@@ -314,6 +314,8 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
             cur = cand; accepts += 1
             if cur < best:
                 best = cur; best_pos = fe.ipos.copy()
+            if max_accepts and accepts >= max_accepts:   # stop after N accepted moves
+                break
         else:
             fe.undo_move(undo)
 

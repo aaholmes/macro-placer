@@ -213,6 +213,24 @@ class DifferentiablePlacer:
         R = self.rudy_field(coord)
         return lapsum_topk_mean(R, 0.05, tau) if topk == "lapsum" else softtopk(R, tau)
 
+    def congestion_lroute(self, coord, gamma=None, tau=0.02, frac=0.05,
+                          blockage_w=1.0, tau_seg=1.0):
+        """Non-gameable L-route congestion surrogate: per-net demand on the source
+        row + sink column (constant weight, so spreading raises it), plus hard-macro
+        blockage, scored on the peak `frac` cells. Mirrors the TILOS metric."""
+        from placers.congestion import lroute_field, macro_blockage_field, topk_mean
+        gamma = gamma if gamma is not None else 0.5 * self.gw
+        xmin, xmax, ymin, ymax = self._bbox(coord, gamma)
+        H, V = lroute_field(xmin, xmax, ymin, ymax, self.nw, self.cxs, self.cys,
+                            self.gw, self.gh, tau_seg)
+        if blockage_w > 0 and self.nh > 0:
+            bw = torch.full((self.nh,), float(blockage_w), device=self.dev)
+            M = macro_blockage_field(coord[:self.nh, 0], coord[:self.nh, 1],
+                                     self.hw[:self.nh], self.hh[:self.nh], bw,
+                                     self.cxs, self.cys, self.gw, self.gh)
+            H = H + M; V = V + M
+        return topk_mean(torch.cat([H.flatten(), V.flatten()]), frac, tau)
+
     # ---- generic optimizer over any differentiable loss ----
     def set_orientations(self, orient):
         """Apply per-hard-macro Klein-4 orientation by sign-flipping pin offsets.

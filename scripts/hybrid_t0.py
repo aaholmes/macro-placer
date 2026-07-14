@@ -3,8 +3,11 @@
 Diff is the primary loop (homotopy). Each chunk, both operators get the SAME
 wall-time budget (chunk-sec): the GPU does as many differentiable steps as fit,
 the CPU does as many greedy iters as fit. Advance the working state to whichever
-gives the lower TRUE proxy (zero temperature). Baseline = pure diff (diff every
-chunk). Both get the same final greedy polish.
+gives the lower TRUE proxy (zero temperature). Baseline = diff-single-pass: pure
+diff every chunk, then a greedy stage. The hybrid does NOT get a final polish --
+it self-polishes (once diff converges, greedy wins every chunk on its own). Both
+spend the same total greedy budget (chunks * greedy_iters), so the only
+difference is greedy-all-at-end vs greedy-interleaved.
 
 True-proxy comparisons in the loop use the validated fast incremental evaluator
 (~1000x faster than the TILOS evaluator, exact in the search regime); the final
@@ -105,10 +108,16 @@ def run(nm, hp, chunks, greedy_iters, seed=0):
                 W, cur_lg, cur = d, d_lg, d_cost
             if cur < best:
                 best, best_pos = cur, cur_lg
-        pol, _ = optimize_fast(fe, best_pos, iters=120000, seed=7, T0=0.0, move_hard=False,
-                               move_soft=True, refresh=120000, log_every=130000, logf=lambda *a: None)
-        final = min(true_cost(best_pos), true_cost(pol))
-        return final, nd_tot // chunks, ng_tot // max(1, chunks if hybrid else 1), greedy_wins
+        if hybrid:
+            final = true_cost(best_pos)          # self-polishes: late chunks pick greedy on their own
+        else:
+            # diff-single-pass: its greedy stage IS the pipeline's polish (same total greedy
+            # budget as the hybrid spends across chunks: chunks * greedy_iters)
+            pol, _ = optimize_fast(fe, best_pos, iters=chunks * greedy_iters, seed=7, T0=0.0,
+                                   move_hard=False, move_soft=True, refresh=chunks * greedy_iters,
+                                   log_every=chunks * greedy_iters + 1, logf=lambda *a: None)
+            final = min(true_cost(best_pos), true_cost(pol))
+        return final, nd_tot // chunks, ng_tot // max(1, chunks), greedy_wins
 
     diff_only, nd_do, _, _ = trajectory(False)
     hybrid_t0, nd_hy, ng_hy, gw = trajectory(True)

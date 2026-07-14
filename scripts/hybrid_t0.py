@@ -96,43 +96,45 @@ def run(nm, hp, chunks, greedy_iters, seed=0):
     # fills that same wall-time each chunk (auto-balanced per problem, N set by hardware)
     t0 = time.time(); greedy_fixed(leg(start), greedy_iters); t_ref = max(0.2, time.time() - t0)
 
-    def diff_chunk_traj(W, best_pos, best, n_diff, n_from):
-        """Run n_diff diff-chunks (homotopy t over n_from chunks), keep-best."""
-        for k in range(n_diff):
-            t = (k + 1) / max(1, n_from)
-            d, _ = diff_time(W, t_ref, t); d_lg = leg(d); W = d
-            c = fast_cost(d_lg)
-            if c < best:
-                best, best_pos = c, d_lg
-        return W, best_pos, best
+    def greedy_deep(pos, iters):
+        pol, _ = optimize_fast(fe, pos, iters=iters, seed=7, T0=0.0, move_hard=False,
+                               move_soft=True, refresh=iters, log_every=iters + 1, logf=lambda *a: None)
+        return pol
 
     # ---- HYBRID: each chunk take the better of {diff burst, greedy} (T=0) ----
-    W = start.copy(); best_pos = leg(W); best = fast_cost(best_pos); G = 0; nd_tot = 0
+    W = start.copy(); best_pos = leg(W); best = fast_cost(best_pos); nd_tot = 0; t_diffs = []
     for k in range(chunks):
         t = (k + 1) / chunks
         d, nd = diff_time(W, t_ref, t); nd_tot += nd; d_lg = leg(d); d_cost = fast_cost(d_lg)
         gpos = greedy_fixed(leg(W), greedy_iters, seed=1000 + k); g_cost = fast_cost(gpos)
         if g_cost < d_cost:
-            W, cur_lg, cur = gpos, gpos, g_cost; G += 1
+            W, cur_lg, cur = gpos, gpos, g_cost
         else:
-            W, cur_lg, cur = d, d_lg, d_cost
+            W, cur_lg, cur = d, d_lg, d_cost; t_diffs.append(t)        # record diff-pick t
         if cur < best:
             best, best_pos = cur, cur_lg
-    hybrid_final = true_cost(best_pos); D = chunks - G
+    hybrid_final = true_cost(best_pos); D = len(t_diffs); G = chunks - D
 
-    # ---- CONTROL (old algorithm), MATCHED effective work: D diff-chunks then G greedy-chunks ----
+    # ---- CONTROL: same D diff-chunks at the SAME t-values, classic order, then G greedy ----
     W2 = start.copy(); b2_pos = leg(W2); b2 = fast_cost(b2_pos)
-    _, b2_pos, b2 = diff_chunk_traj(W2, b2_pos, b2, D, max(1, D))
+    for t in t_diffs:
+        d, _ = diff_time(W2, t_ref, t); d_lg = leg(d); W2 = d
+        c = fast_cost(d_lg)
+        if c < b2:
+            b2, b2_pos = c, d_lg
     control_final = true_cost(b2_pos)
     if G > 0:
-        pol, _ = optimize_fast(fe, b2_pos, iters=G * greedy_iters, seed=7, T0=0.0, move_hard=False,
-                               move_soft=True, refresh=G * greedy_iters,
-                               log_every=G * greedy_iters + 1, logf=lambda *a: None)
-        control_final = min(control_final, true_cost(pol))
-    return dict(benchmark=nm, control=control_final, hybrid=hybrid_final,
+        control_final = min(control_final, true_cost(greedy_deep(b2_pos, G * greedy_iters)))
+
+    # ---- REFERENCE: the actual pipeline (full diff homotopy + G greedy) ----
+    coord = P.place(loss, pos0=None, iters=hp["iters"], seed=0, logf=None)
+    pl_pos = leg(coord); pipeline_final = true_cost(pl_pos)
+    if G > 0:
+        pipeline_final = min(pipeline_final, true_cost(greedy_deep(pl_pos, G * greedy_iters)))
+
+    return dict(benchmark=nm, control=control_final, hybrid=hybrid_final, pipeline=pipeline_final,
                 gain=control_final - hybrid_final, t_ref=round(t_ref, 2),
-                avg_diff_steps=nd_tot // chunks, greedy_iters=greedy_iters,
-                D=D, G=G, chunks=chunks)
+                avg_diff_steps=nd_tot // chunks, greedy_iters=greedy_iters, D=D, G=G, chunks=chunks)
 
 
 if __name__ == "__main__":
@@ -148,11 +150,9 @@ if __name__ == "__main__":
         r = run(nm, hp, a.chunks, a.greedy_iters)
         out.append(r)
         json.dump(out, open(f"{ROOT}/notes/hybrid_t0_result.json", "w"), indent=2)
-        print(f"[{time.strftime('%H:%M:%S')}] {nm}: control(matched)={r['control']:.4f} "
-              f"hybrid={r['hybrid']:.4f} gain={r['gain']:+.4f} | "
-              f"hybrid picked {r['D']} diff / {r['G']} greedy chunks; "
-              f"{r['greedy_iters']} greedy-iters=~{r['t_ref']}s -> {r['avg_diff_steps']} diff-steps/chunk "
-              f"({time.time()-t0:.0f}s)", flush=True)
+        print(f"[{time.strftime('%H:%M:%S')}] {nm}: control(matched-t)={r['control']:.4f} "
+              f"hybrid={r['hybrid']:.4f} gain={r['gain']:+.4f} | pipeline(full-homotopy)={r['pipeline']:.4f} | "
+              f"hybrid picked {r['D']} diff / {r['G']} greedy chunks ({time.time()-t0:.0f}s)", flush=True)
     gains = [r["gain"] for r in out]
     print(f"\nmean gain (control - hybrid): {np.mean(gains):+.4f} | "
           f"hybrid wins {sum(1 for g in gains if g>1e-4)}/{len(gains)} | "

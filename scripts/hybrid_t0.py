@@ -77,8 +77,12 @@ def run(nm, hp, chunks, greedy_iters, seed=0):
         out = np.asarray(coord, np.float64).copy(); out[:, :2] = c.detach().cpu().numpy()
         return out, n
 
-    def greedy_fixed(pos, iters):
-        best, _ = optimize_fast(fe, pos, iters=iters, seed=1, T0=0.0, move_hard=False,
+    def greedy_fixed(pos, iters, seed=1):
+        # seed MUST vary across chunks: optimize_fast is memoryless per move, so a
+        # fixed seed re-proposes the identical move sequence every chunk (explores
+        # ~iters distinct moves total instead of chunks*iters). That silently
+        # cripples fine-grained chunking.
+        best, _ = optimize_fast(fe, pos, iters=iters, seed=seed, T0=0.0, move_hard=False,
                                 move_soft=True, refresh=iters, log_every=iters + 1, logf=lambda *a: None)
         return best
 
@@ -107,7 +111,7 @@ def run(nm, hp, chunks, greedy_iters, seed=0):
     for k in range(chunks):
         t = (k + 1) / chunks
         d, nd = diff_time(W, t_ref, t); nd_tot += nd; d_lg = leg(d); d_cost = fast_cost(d_lg)
-        gpos = greedy_fixed(leg(W), greedy_iters); g_cost = fast_cost(gpos)
+        gpos = greedy_fixed(leg(W), greedy_iters, seed=1000 + k); g_cost = fast_cost(gpos)
         if g_cost < d_cost:
             W, cur_lg, cur = gpos, gpos, g_cost; G += 1
         else:

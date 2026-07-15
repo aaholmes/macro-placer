@@ -52,7 +52,8 @@ def run_cell(nm, hp, lam_c, iters, seeds):
     def loss(Pl, coord, t):
         L = base(Pl, coord, t)
         if lam_c > 0:
-            L = L + lam_c * t * Pl.congestion_lroute(coord) / norm
+            # te-ramp: congestion on the density schedule (off during spread, on when clustered)
+            L = L + lam_c * (t ** hp["ramp_p"]) * Pl.congestion_lroute(coord) / norm
         return L
 
     best = None

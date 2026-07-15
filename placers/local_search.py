@@ -29,21 +29,47 @@ def _overlaps(pos, i, xy, hw, hh, nh, gap):
     return bool(hit.any())
 
 
-def _hot_macros(fe, pos, nm):
-    """Rank all macros (hard+soft) by the congestion+density of their cell."""
+def _cell_field(fe, pos):
+    """Per-grid-cell congestion+density field (length grid_col*grid_row), the
+    same quantity `_hot_macros` gathers per macro. Used both to bias *which* cell
+    to move (hot) and *where to send it* (cold)."""
     fe.build_congestion(pos)
     Vs = fe._smooth(fe.Vraw / fe.grid_v_routes, "V") + fe.Vmac / fe.grid_v_routes
     Hs = fe._smooth(fe.Hraw / fe.grid_h_routes, "H") + fe.Hmac / fe.grid_h_routes
-    cong = Vs + Hs
     dens = fe.build_density(pos) / fe.grid_area
+    return np.clip(Vs + Hs + dens, 0.0, None)
+
+
+def _hot_from_field(field, fe, pos, nm):
     gc = fe.plc.grid_col; gr = fe.plc.grid_row
     gw = fe.W / gc; gh = fe.H / gr
     hot = np.empty(nm)
     for i in range(nm):
         c = min(int(pos[i, 0] // gw), gc - 1)
         r = min(int(pos[i, 1] // gh), gr - 1)
-        hot[i] = cong[r * gc + c] + dens[r * gc + c]
+        hot[i] = field[r * gc + c]
     return np.clip(hot, 1e-9, None)
+
+
+def _hot_macros(fe, pos, nm):
+    """Rank all macros (hard+soft) by the congestion+density of their cell."""
+    return _hot_from_field(_cell_field(fe, pos), fe, pos, nm)
+
+
+def _directed_target(field, gc, gr, gw, gh, hw_i, hh_i, W, H, rng):
+    """Sample a destination in a COLD grid cell (low field), then a uniform point
+    within it, clipped to the macro's legal band. This is the discrete analogue of
+    following the congestion gradient toward cold space -- the piece the global
+    placer had and the detailed placer lacked."""
+    w = field.max() - field                 # coldest cells -> largest weight
+    w = np.clip(w, 1e-9, None)
+    t = int(rng.choice(field.size, p=w / w.sum()))
+    r, c = divmod(t, gc)
+    x = (c + rng.random()) * gw
+    y = (r + rng.random()) * gh
+    x = min(max(x, hw_i), W - hw_i)
+    y = min(max(y, hh_i), H - hh_i)
+    return x, y
 
 
 def optimize_portfolio(fe, pos0, iters=200000, seed=0, jump_frac=0.3,
@@ -270,25 +296,37 @@ def optimize_flips(fe, pos0, sweeps=4, logf=print):
 
 def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0,
                   hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, move_hard=True,
-                  move_soft=True, refresh=2000, log_every=2000, logf=print, max_accepts=None):
+                  move_soft=True, refresh=2000, log_every=2000, logf=print, max_accepts=None,
+                  cong_directed=0.0):
     """Greedy/SA single-move local search using the INCREMENTAL evaluator
-    (~55x faster than full recompute). Returns (best_pos, hist)."""
+    (~55x faster than full recompute). Returns (best_pos, hist).
+
+    cong_directed in [0,1]: fraction of proposals that send a hot-selected cell to
+    a COLD grid cell (sampled from the congestion+density field) instead of a local
+    jitter/random jump. Acceptance is unchanged (true proxy delta), so this only
+    reshapes the proposal distribution toward congestion-relieving moves -- and it
+    lets *soft* cells make the long directed jumps that plain jitter forbids. 0.0
+    reproduces the original behaviour exactly."""
     rng = np.random.default_rng(seed)
     b = fe.b
     nh = b.num_hard_macros; nm = b.num_macros
     sz = b.macro_sizes.numpy()
     hw = sz[:, 0] / 2.0; hh = sz[:, 1] / 2.0
     W, H = fe.W, fe.H
+    gc = fe.plc.grid_col; gr = fe.plc.grid_row
+    gw = W / gc; gh = H / gr
 
     cur = fe.init_incremental(pos0)
     best = cur; best_pos = fe.ipos.copy()
     hist = [(0, best)]
-    hot = _hot_macros(fe, fe.ipos, nm)   # note: rebuilds grid/cong at committed pos
+    field = _cell_field(fe, fe.ipos)     # rebuilds grid/cong at committed pos
+    hot = _hot_from_field(field, fe, fe.ipos, nm)
     accepts = 0
 
     for it in range(iters):
         if it and it % refresh == 0:
-            hot = _hot_macros(fe, fe.ipos, nm)
+            field = _cell_field(fe, fe.ipos)
+            hot = _hot_from_field(field, fe, fe.ipos, nm)
         lo = 0 if move_hard else nh
         hi = nm if move_soft else nh
         if rng.random() < hot_bias:
@@ -297,7 +335,9 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
             i = int(rng.integers(lo, hi))
         is_hard = i < nh
 
-        if is_hard and rng.random() < jump_frac:
+        if cong_directed > 0 and rng.random() < cong_directed:
+            x, y = _directed_target(field, gc, gr, gw, gh, hw[i], hh[i], W, H, rng)
+        elif is_hard and rng.random() < jump_frac:
             x = rng.uniform(hw[i], W - hw[i]); y = rng.uniform(hh[i], H - hh[i])
         else:
             x = min(max(fe.ipos[i, 0] + rng.normal(0, jitter_sigma), hw[i]), W - hw[i])

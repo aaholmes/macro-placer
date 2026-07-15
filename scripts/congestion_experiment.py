@@ -97,8 +97,11 @@ if __name__ == "__main__":
             row[f"lc{lc}"] = r
             print(f"[{time.strftime('%H:%M:%S')}] {nm} lam_c={lc}: proxy={r['proxy']:.4f} "
                   f"cong={r['cong']:.4f} ov={r['overlaps']}", flush=True)
-        base_p = row[f"lc0"]["proxy"]
         best_lc = min(lam_cs, key=lambda lc: row[f"lc{lc}"]["proxy"])
         best_p = row[f"lc{best_lc}"]["proxy"]
-        print(f"  => {nm}: baseline(lc0)={base_p:.4f}  best(lc={best_lc})={best_p:.4f}  "
-              f"gain={base_p-best_p:+.4f}", flush=True)
+        if 0.0 in lam_cs:
+            base_p = row[f"lc{0.0}"]["proxy"]
+            print(f"  => {nm}: baseline={base_p:.4f}  best(lc={best_lc})={best_p:.4f}  "
+                  f"gain={base_p-best_p:+.4f}", flush=True)
+        else:
+            print(f"  => {nm}: best(lc={best_lc})={best_p:.4f}", flush=True)

@@ -23,6 +23,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--bench", default="ibm06")
 ap.add_argument("--lam-cs", default="0,0.001,0.003,0.01,0.03,0.1")
 ap.add_argument("--iters", type=int, default=15000)
+ap.add_argument("--log", action="store_true", help="minimize log(cong) (scale-invariant gradient)")
 a = ap.parse_args()
 nm = a.bench
 b, plc = load_benchmark_from_dir(f"{CHAL}/external/MacroPlacement/Testcases/ICCAD04/{nm}")
@@ -42,7 +43,9 @@ for lc in [float(x) for x in a.lam_cs.split(",")]:
     def loss(Pl, coord, t):
         L = base(Pl, coord, t)
         if lc > 0:
-            L = L + lc * t * Pl.congestion_lroute(coord) / norm
+            cong = Pl.congestion_lroute(coord)
+            term = torch.log(cong + 1.0) if a.log else cong / norm   # log => scale-invariant grad
+            L = L + lc * t * term
         return L
     raw = P.place(loss, pos0=None, iters=a.iters, lr=p["lr"], seed=0, logf=None)
     lg, _, _ = legalize(raw, sz, b.num_hard_macros, b.canvas_width, b.canvas_height, gap=0.01)

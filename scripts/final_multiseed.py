@@ -54,11 +54,22 @@ for f in glob.glob(f"{ROOT}/notes/results/*.json"):
         gref[d["benchmark"]] = d["tilos"]
 
 
+_ENV = {}
+def env(nm):
+    """Load benchmark + build placer IR ONCE per benchmark, reuse across all
+    (config, seed) cells -- avoids rebuilding the expensive wirelength/congestion
+    IR on every cell."""
+    if nm not in _ENV:
+        b, plc = load_benchmark_from_dir(f"{CHAL}/external/MacroPlacement/Testcases/ICCAD04/{nm}")
+        fe = FastEval(b, plc); P = DifferentiablePlacer(fe); sz = b.macro_sizes.numpy()
+        _ENV[nm] = (b, plc, fe, P, sz)
+    return _ENV[nm]
+
+
 def one(nm, hp, seed, iters):
     """One diff(seed)->legalize->greedy(seed) chain; both stages use the same seed
     so best-of-N varies diff AND greedy noise together."""
-    b, plc = load_benchmark_from_dir(f"{CHAL}/external/MacroPlacement/Testcases/ICCAD04/{nm}")
-    fe = FastEval(b, plc); P = DifferentiablePlacer(fe); sz = b.macro_sizes.numpy()
+    b, plc, fe, P, sz = env(nm)
     loss = proxy_loss(gamma_hi_mult=hp["gamma"], lam_d0=hp["lam_d_end"] * hp["lam_d_ratio"],
                       lam_d1=hp["lam_d_end"], lam_c0=0.0, lam_c1=0.0, tau_d=hp["tau_d"],
                       tau_c=hp["tau_c"], target=hp["target"], topk="lapsum", dmode=hp["dmode"],
@@ -73,37 +84,47 @@ def one(nm, hp, seed, iters):
                 overlaps=int(c["overlap_count"]))
 
 
-rows = []
-for nm in benches:
-    cells = []
-    for c in cfg_ids:
-        for s in range(a.seeds):
+def report(tag):
+    """Best-of-whatever-is-on-disk so far: per-bench min over all cached cells,
+    element-wise min with the greedy-ref floor. Callable after every seed sweep so
+    partial runs still yield a full 17-benchmark number."""
+    rows = []
+    for nm in benches:
+        cells = [json.load(open(f)) for f in glob.glob(f"{OUT}/{nm}_c*_s*.json")]
+        if not cells:
+            continue
+        legal = [r for r in cells if r["overlaps"] == 0] or cells
+        bc = min(legal, key=lambda r: r["proxy"])
+        floor = gref.get(nm)
+        final = min([x for x in [bc["proxy"], floor] if x is not None])
+        rows.append(dict(benchmark=nm, diff_best=bc["proxy"], best_config=bc["config"],
+                         best_seed=bc["seed"], greedy_ref=floor, final=final, n_cells=len(cells)))
+    if len(rows) < len(benches):
+        print(f"  [{tag}] only {len(rows)}/{len(benches)} benchmarks have cells yet", flush=True)
+        return
+    avg = float(np.mean([r["final"] for r in rows]))
+    avg_do = float(np.mean([r["diff_best"] for r in rows]))
+    print(f"\n=== [{tag}] MULTI-SEED best-so-far (configs={cfg_ids}) ===")
+    print(f"  diff-pipeline avg:      {avg_do:.4f}")
+    print(f"  + greedy-ref floor min: {avg:.4f}")
+    print(f"  prior personal best {PRIOR:.4f}  ({100*(PRIOR-avg)/PRIOR:+.1f}% vs prior)\n", flush=True)
+    json.dump(dict(configs=cfg_ids, seeds=a.seeds, avg=avg, avg_diffonly=avg_do, prior=PRIOR,
+                   rows=rows), open(f"{ROOT}/notes/final_multiseed_report.json", "w"), indent=2)
+
+
+# seed-OUTER: complete seed 0 across all 17 benchmarks first, then seed 1, ...
+# so any interruption still yields a full-coverage (lower-N) best-of number.
+for s in range(a.seeds):
+    for nm in benches:
+        for c in cfg_ids:
             ck = f"{OUT}/{nm}_c{c}_s{s}.json"
             if os.path.exists(ck):
-                r = json.load(open(ck))
-            else:
-                t0 = time.time(); r = one(nm, CONFIGS[c], s, a.iters or CONFIGS[c]["iters"])
-                r["seconds"] = time.time() - t0; r["config"] = c; r["seed"] = s
-                json.dump(r, open(ck, "w"))
-            cells.append(r)
+                continue
+            t0 = time.time(); r = one(nm, CONFIGS[c], s, a.iters or CONFIGS[c]["iters"])
+            r["seconds"] = time.time() - t0; r["config"] = c; r["seed"] = s
+            json.dump(r, open(ck, "w"))
             print(f"[{time.strftime('%H:%M:%S')}] {nm} cfg{c} seed{s}: proxy={r['proxy']:.4f} "
-                  f"cong={r['cong']:.4f} ov={r['overlaps']}", flush=True)
-    legal = [r for r in cells if r["overlaps"] == 0] or cells
-    bestcell = min(legal, key=lambda r: r["proxy"])
-    diff_best = bestcell["proxy"]
-    floor = gref.get(nm)
-    final = min([x for x in [diff_best, floor] if x is not None])
-    rows.append(dict(benchmark=nm, diff_best=diff_best, best_config=bestcell["config"],
-                     best_seed=bestcell["seed"], greedy_ref=floor, final=final))
-    print(f"  => {nm}: diff-best={diff_best:.4f} (cfg{bestcell['config']} seed{bestcell['seed']}) "
-          f"greedy-ref={floor}  FINAL={final:.4f}", flush=True)
+                  f"cong={r['cong']:.4f} ov={r['overlaps']} ({r['seconds']:.0f}s)", flush=True)
+    report(f"after seed sweep {s} ({(s+1)*len(cfg_ids)} draws/bench)")
 
-avg = float(np.mean([r["final"] for r in rows]))
-avg_diffonly = float(np.mean([r["diff_best"] for r in rows]))
-print(f"\n=== FINAL MULTI-SEED (configs={cfg_ids}, {a.seeds} seeds each, best-of-{len(cfg_ids)*a.seeds}) ===")
-print(f"  diff-pipeline avg:      {avg_diffonly:.4f}")
-print(f"  + greedy-ref floor min: {avg:.4f}")
-print(f"  prior personal best {PRIOR:.4f}  ({100*(PRIOR-avg)/PRIOR:+.1f}% vs prior)")
-json.dump(dict(configs=cfg_ids, seeds=a.seeds, avg=avg, avg_diffonly=avg_diffonly,
-               prior=PRIOR, rows=rows), open(f"{ROOT}/notes/final_multiseed_report.json", "w"), indent=2)
-print("saved notes/final_multiseed_report.json", flush=True)
+print("DONE", flush=True)

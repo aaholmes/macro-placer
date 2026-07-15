@@ -36,7 +36,7 @@ def hp_from_params(p):
                 lr=p["lr"], ramp_p=p["ramp_p"], lsteps=p["lsteps_n"], iters=p["iters"])
 
 
-def run_cell(nm, hp, lam_c, iters, seeds):
+def run_cell(nm, hp, lam_c, iters, seeds, use_log=False):
     b, plc = load_benchmark_from_dir(f"{CHAL}/external/MacroPlacement/Testcases/ICCAD04/{nm}")
     fe = FastEval(b, plc); P = DifferentiablePlacer(fe); sz = b.macro_sizes.numpy()
     base = proxy_loss(gamma_hi_mult=hp["gamma"], lam_d0=hp["lam_d_end"] * hp["lam_d_ratio"],
@@ -52,8 +52,10 @@ def run_cell(nm, hp, lam_c, iters, seeds):
     def loss(Pl, coord, t):
         L = base(Pl, coord, t)
         if lam_c > 0:
+            cong = Pl.congestion_lroute(coord)
+            term = torch.log(cong + 1.0) if use_log else cong / norm
             # te-ramp: congestion on the density schedule (off during spread, on when clustered)
-            L = L + lam_c * (t ** hp["ramp_p"]) * Pl.congestion_lroute(coord) / norm
+            L = L + lam_c * (t ** hp["ramp_p"]) * term
         return L
 
     best = None
@@ -76,18 +78,21 @@ if __name__ == "__main__":
     ap.add_argument("--lam-cs", default="0,0.05,0.1,0.2,0.4")
     ap.add_argument("--iters", type=int, default=15000)
     ap.add_argument("--seeds", type=int, default=2)
+    ap.add_argument("--log", action="store_true", help="minimize log(cong) instead of cong")
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     hp = hp_from_params(json.load(open(f"{ROOT}/notes/bayes_final.json"))["params"])
     lam_cs = [float(x) for x in a.lam_cs.split(",")]
+    tag = "log" if a.log else "raw"
     for nm in a.benches.split(","):
         row = {"benchmark": nm}
         for lc in lam_cs:
-            ck = f"{OUT}/{nm}_lc{lc}.json"
+            ck = f"{OUT}/{nm}_{tag}_lc{lc}.json"
             if os.path.exists(ck):
                 r = json.load(open(ck))
             else:
-                t0 = time.time(); r = run_cell(nm, hp, lc, a.iters, a.seeds); r["seconds"] = time.time() - t0
+                t0 = time.time(); r = run_cell(nm, hp, lc, a.iters, a.seeds, use_log=a.log)
+                r["seconds"] = time.time() - t0; r["tag"] = tag
                 json.dump(r, open(ck, "w"))
             row[f"lc{lc}"] = r
             print(f"[{time.strftime('%H:%M:%S')}] {nm} lam_c={lc}: proxy={r['proxy']:.4f} "

@@ -1,0 +1,74 @@
+[
+  {
+    "benchmark": "ibm01",
+    "iters": 5000,
+    "diff": 0.9957274794578552,
+    "diff_greedy": 0.8163132071495056,
+    "overlaps": 0,
+    "seconds": 442.1686613559723
+  },
+  {
+    "benchmark": "ibm01",
+    "iters": 15000,
+    "diff": 0.9732707142829895,
+    "diff_greedy": 0.7980485558509827,
+    "overlaps": 0,
+    "seconds": 874.473340511322
+  },
+  {
+    "benchmark": "ibm01",
+    "iters": 30000,
+    "diff": 0.969391942024231,
+    "diff_greedy": 0.7946734428405762,
+    "overlaps": 0,
+    "seconds": 1543.471578836441
+  },
+  {
+    "benchmark": "ibm09",
+    "iters": 5000,
+    "diff": 1.0280542373657227,
+    "diff_greedy": 0.8223519325256348,
+    "overlaps": 0,
+    "seconds": 570.2163622379303
+  },
+  {
+    "benchmark": "ibm09",
+    "iters": 15000,
+    "diff": 1.005708932876587,
+    "diff_greedy": 0.8089603185653687,
+    "overlaps": 0,
+    "seconds": 1001.1032013893127
+  },
+  {
+    "benchmark": "ibm09",
+    "iters": 30000,
+    "diff": 0.9930410981178284,
+    "diff_greedy": 0.7996006608009338,
+    "overlaps": 0,
+    "seconds": 1665.8645873069763
+  },
+  {
+    "benchmark": "ibm17",
+    "iters": 5000,
+    "diff": 1.4378421306610107,
+    "diff_greedy": 1.1849662065505981,
+    "overlaps": 0,
+    "seconds": 1507.9422042369843
+  },
+  {
+    "benchmark": "ibm17",
+    "iters": 15000,
+    "diff": 1.4635000228881836,
+    "diff_greedy": 1.212699294090271,
+    "overlaps": 0,
+    "seconds": 1929.2635850906372
+  },
+  {
+    "benchmark": "ibm17",
+    "iters": 30000,
+    "diff": 1.4634064435958862,
+    "diff_greedy": 1.1843217611312866,
+    "overlaps": 0,
+    "seconds": 2562.1152691841125
+  }
+]

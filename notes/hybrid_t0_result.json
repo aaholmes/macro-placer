@@ -1,0 +1,28 @@
+[
+  {
+    "benchmark": "ibm06",
+    "control": 1.404596209526062,
+    "hybrid": 1.3785419464111328,
+    "pipeline": 1.377465009689331,
+    "gain": 0.0260542631149292,
+    "t_ref": 1.18,
+    "avg_diff_steps": 231,
+    "greedy_iters": 200,
+    "D": 2,
+    "G": 148,
+    "chunks": 150
+  },
+  {
+    "benchmark": "ibm02",
+    "control": 1.1367058753967285,
+    "hybrid": 1.1253809928894043,
+    "pipeline": 1.076722502708435,
+    "gain": 0.011324882507324219,
+    "t_ref": 1.45,
+    "avg_diff_steps": 280,
+    "greedy_iters": 200,
+    "D": 3,
+    "G": 147,
+    "chunks": 150
+  }
+]

@@ -1,0 +1,20 @@
+[
+  {
+    "benchmark": "ibm06",
+    "pipeline": 1.4329752922058105,
+    "hybrid": 1.9208476543426514,
+    "gain": -0.4878723621368408,
+    "chunks": 55,
+    "diff_wins": 22,
+    "budget": 90.0
+  },
+  {
+    "benchmark": "ibm02",
+    "pipeline": 1.0845407247543335,
+    "hybrid": 1.367077112197876,
+    "gain": -0.2825363874435425,
+    "chunks": 25,
+    "diff_wins": 11,
+    "budget": 90.0
+  }
+]

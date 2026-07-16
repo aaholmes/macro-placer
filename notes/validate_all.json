@@ -1,0 +1,159 @@
+{
+  "rows": [
+    {
+      "benchmark": "ibm01",
+      "proxy": 0.9825514554977417,
+      "reference": 1.0387330055236816,
+      "ratio": 0.9459133870521272,
+      "tuned": true,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm02",
+      "proxy": 1.3074603080749512,
+      "reference": 1.5656722784042358,
+      "ratio": 0.8350791708514764,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm03",
+      "proxy": 1.294664978981018,
+      "reference": 1.3254516124725342,
+      "ratio": 0.9767727216883566,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm04",
+      "proxy": 1.1534478664398193,
+      "reference": 1.3135480880737305,
+      "ratio": 0.8781162082397058,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm06",
+      "proxy": 1.7790135145187378,
+      "reference": 1.6578407287597656,
+      "ratio": 1.073090727991477,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm07",
+      "proxy": 1.3292975425720215,
+      "reference": 1.4760745763778687,
+      "ratio": 0.9005625893469268,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm08",
+      "proxy": 1.7036975622177124,
+      "reference": 1.846880555152893,
+      "ratio": 0.9224730627350575,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm09",
+      "proxy": 1.0233794450759888,
+      "reference": 1.1104764938354492,
+      "ratio": 0.9215678591640981,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm10",
+      "proxy": 1.269040822982788,
+      "reference": 1.3366508483886719,
+      "ratio": 0.9494183350219039,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm11",
+      "proxy": 1.0636131763458252,
+      "reference": 1.2137606143951416,
+      "ratio": 0.8762956745600614,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm12",
+      "proxy": 1.5605610609054565,
+      "reference": 1.6252226829528809,
+      "ratio": 0.9602136847303041,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm13",
+      "proxy": 1.2099045515060425,
+      "reference": 1.3853912353515625,
+      "ratio": 0.8733305947319727,
+      "tuned": true,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm14",
+      "proxy": 1.4390175342559814,
+      "reference": 1.5938102006912231,
+      "ratio": 0.9028788582429016,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm15",
+      "proxy": 1.4396309852600098,
+      "reference": 1.603222370147705,
+      "ratio": 0.8979608893103059,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm16",
+      "proxy": 1.3978490829467773,
+      "reference": 1.4911301136016846,
+      "ratio": 0.9374427289717893,
+      "tuned": false,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm17",
+      "proxy": 1.45487380027771,
+      "reference": 1.7391717433929443,
+      "ratio": 0.8365325654609599,
+      "tuned": true,
+      "seeds": 8
+    },
+    {
+      "benchmark": "ibm18",
+      "proxy": 1.5955076217651367,
+      "reference": 1.7898764610290527,
+      "ratio": 0.8914065615723179,
+      "tuned": false,
+      "seeds": 8
+    }
+  ],
+  "abs_avg": 1.3531477240955128,
+  "abs_ref": 1.4772302122677075,
+  "mean_ratio_all": 0.916415036451279,
+  "mean_ratio_heldout": 0.9230913623161916,
+  "config": {
+    "dmode": "overflow",
+    "lam_d_end_o": 0.07795314107256225,
+    "use_cong": 0,
+    "lam_d_ratio": 0.040916599877077596,
+    "gamma": 9.680919613962839,
+    "tau_d": 0.10785220922976244,
+    "tau_c": 0.010337820976444935,
+    "lam_wl0": 0.577661641519922,
+    "target": 0.7067529176926369,
+    "lr": 0.26629024654116507,
+    "iters": 5000,
+    "ramp_p": 3.7919570781529326,
+    "lsteps_n": 0
+  }
+}

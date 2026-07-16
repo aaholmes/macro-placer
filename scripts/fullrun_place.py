@@ -51,6 +51,10 @@ def build_loss(hp):
 ap = argparse.ArgumentParser()
 ap.add_argument("--iters", type=int, default=0, help="0 = use each config's own tuned iters")
 ap.add_argument("--topk", type=int, default=5)
+ap.add_argument("--configs", default="",
+                help="explicit comma-sep trial numbers (overrides --topk); default uses "
+                     "the finalize-verified set, NOT top-k by search value (which excludes "
+                     "the multistart winner trial 221 -> the 1.0455 regression)")
 ap.add_argument("--deadline-min", type=float, required=True)
 ap.add_argument("--benches", default=",".join(ALL))
 a = ap.parse_args()
@@ -58,7 +62,19 @@ os.makedirs(OUT, exist_ok=True)
 
 study = optuna.load_study(study_name="diffplace",
                           storage="sqlite:////home/laz/partcl/my-macro-placer/notes/bayes.db")
-top = sorted([t for t in study.trials if t.value is not None], key=lambda t: t.value)[:a.topk]
+# Config selection: finalize-verified configs by DEFAULT (best-of-16 multistart ranking),
+# not top-k by raw search value. Search-value top-k excludes trial 221/222 (the actual
+# multistart winners) and caused the earlier 1.0455 vs 1.0376 regression.
+FINALIZE = [221, 97, 95, 222, 87]
+byn = {t.number: t for t in study.trials}
+if a.configs:
+    ids = [int(x) for x in a.configs.split(",")]
+elif FINALIZE and all(n in byn for n in FINALIZE):
+    ids = FINALIZE[:a.topk]
+else:
+    ids = [t.number for t in sorted([t for t in study.trials if t.value is not None],
+                                    key=lambda t: t.value)[:a.topk]]
+top = [byn[n] for n in ids]
 configs = [(t.number, hp_from_params(t.params), build_loss(hp_from_params(t.params))) for t in top]
 benches = a.benches.split(",")
 per_bench = a.deadline_min * 60 / len(benches)

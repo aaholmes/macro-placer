@@ -33,16 +33,16 @@
 Proxy cost = 1.0·wirelength + 0.5·density + 0.5·congestion (lower is better; zero macro overlap required).</p>
 
 <p>
-<span class="kpi"><b>0.706</b> mean ratio vs reference (−29%)</span>
-<span class="kpi"><b>1.038</b> abs. avg over 17</span>
+<span class="kpi"><b>0.692</b> mean ratio vs reference (−31%)</span>
+<span class="kpi"><b>1.0155</b> abs. avg over 17</span>
 <span class="kpi">0 overlaps, all 17</span>
 </p>
 
 <p>Starting from the placement each benchmark ships with (avg proxy <b>1.477</b>), our pipeline reaches
-an average proxy of <b>1.038</b> across all 17 designs — a <b>29% improvement</b> — with zero overlaps
+an average proxy of <b>1.0155</b> across all 17 designs — a <b>31% improvement</b> — with zero overlaps
 everywhere. On the easiest designs we dip below the current leaderboard leader's <i>average</i>
-(ibm01 0.79, ibm09 0.81 vs 0.9507); the hard, congestion-bound designs (ibm08/17/18) keep our overall
-average ~9% above the top score.</p>
+(ibm01 0.78, ibm09 0.80 vs 0.9507); the hard, congestion-bound designs (ibm08/17/18) keep our overall
+average ~7% above the top score.</p>
 
 <img class="fig" src="fig_perbench.png" alt="per-benchmark comparison">
 
@@ -106,15 +106,15 @@ mean ratio-to-reference so no single design dominates. The winning configuration
 <table>
 <thead><tr><th>design</th><th>reference</th><th>ours</th><th>ratio</th><th>design</th><th>reference</th><th>ours</th><th>ratio</th></tr></thead>
 <tbody>
-<tr><td>ibm01†</td><td>1.039</td><td>0.794</td><td class="win">0.765</td><td>ibm11</td><td>1.214</td><td>0.853</td><td class="win">0.703</td></tr>
-<tr><td>ibm02</td><td>1.566</td><td>1.014</td><td class="win">0.647</td><td>ibm12</td><td>1.625</td><td>1.172</td><td class="win">0.721</td></tr>
-<tr><td>ibm03</td><td>1.325</td><td>0.979</td><td class="win">0.738</td><td>ibm13†</td><td>1.385</td><td>0.934</td><td class="win">0.674</td></tr>
-<tr><td>ibm04</td><td>1.314</td><td>0.940</td><td class="win">0.716</td><td>ibm14</td><td>1.594</td><td>1.121</td><td class="win">0.703</td></tr>
-<tr><td>ibm06</td><td>1.658</td><td>1.142</td><td class="win">0.689</td><td>ibm15</td><td>1.603</td><td>1.109</td><td class="win">0.692</td></tr>
-<tr><td>ibm07</td><td>1.476</td><td>1.014</td><td class="win">0.687</td><td>ibm16</td><td>1.491</td><td>1.071</td><td class="win">0.718</td></tr>
-<tr><td>ibm08</td><td>1.847</td><td>1.230</td><td class="win">0.666</td><td>ibm17†</td><td>1.739</td><td>1.184</td><td class="win">0.681</td></tr>
-<tr><td>ibm09</td><td>1.110</td><td>0.811</td><td class="win">0.730</td><td>ibm18</td><td>1.790</td><td>1.217</td><td class="win">0.680</td></tr>
-<tr><td>ibm10</td><td>1.337</td><td>1.056</td><td class="win">0.790</td><td><b>AVG</b></td><td><b>1.477</b></td><td><b>1.038</b></td><td class="win"><b>0.706</b></td></tr>
+<tr><td>ibm01†</td><td>1.039</td><td>0.784</td><td class="win">0.755</td><td>ibm11</td><td>1.214</td><td>0.858</td><td class="win">0.707</td></tr>
+<tr><td>ibm02</td><td>1.566</td><td>0.996</td><td class="win">0.636</td><td>ibm12</td><td>1.625</td><td>1.186</td><td class="win">0.730</td></tr>
+<tr><td>ibm03</td><td>1.325</td><td>0.941</td><td class="win">0.710</td><td>ibm13†</td><td>1.385</td><td>0.906</td><td class="win">0.654</td></tr>
+<tr><td>ibm04</td><td>1.314</td><td>0.902</td><td class="win">0.687</td><td>ibm14</td><td>1.594</td><td>1.094</td><td class="win">0.687</td></tr>
+<tr><td>ibm06</td><td>1.658</td><td>1.107</td><td class="win">0.668</td><td>ibm15</td><td>1.603</td><td>1.122</td><td class="win">0.700</td></tr>
+<tr><td>ibm07</td><td>1.476</td><td>0.993</td><td class="win">0.673</td><td>ibm16</td><td>1.491</td><td>1.102</td><td class="win">0.739</td></tr>
+<tr><td>ibm08</td><td>1.847</td><td>1.057</td><td class="win">0.573</td><td>ibm17†</td><td>1.739</td><td>1.205</td><td class="win">0.693</td></tr>
+<tr><td>ibm09</td><td>1.110</td><td>0.797</td><td class="win">0.717</td><td>ibm18</td><td>1.790</td><td>1.185</td><td class="win">0.662</td></tr>
+<tr><td>ibm10</td><td>1.337</td><td>1.027</td><td class="win">0.768</td><td><b>AVG</b></td><td><b>1.477</b></td><td><b>1.0155</b></td><td class="win"><b>0.692</b></td></tr>
 </tbody>
 </table>
 <p>We beat the reference on <b>all 17</b>. Crucially, the 14 held-out designs (mean ratio 0.71) do as well
@@ -170,10 +170,12 @@ below the seed-noise floor.</p>
 
 <h3>Bottom line</h3>
 <p>The result is a general, differentiable-loss placer whose configuration transfers across designs and
-sets a solid mid-leaderboard score (1.038). The differentiable stage supplies a good starting basin (~4%
+sets a solid mid-leaderboard score (1.0155). The differentiable stage supplies a good starting basin (6.2%
 better than greedy-from-reference), but greedy detailed placement does most of the absolute-quality work.
-Closing the remaining ~9% to the top score would require a stronger detailed-placement or global method,
-not further tuning.</p>
+The remaining ~7% to the top score is <i>not</i> a congestion-modeling problem: adding an explicit congestion
+term to the global loss, and directing greedy toward congested cells, both proved neutral-to-negative in
+paired tests (greedy already minimizes the true congestion directly). Closing it needs a detailed placer
+that makes coordinated, multi-cell moves, not further tuning — see the repository appendix.</p>
 
 </body>
 </html>

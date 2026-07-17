@@ -129,13 +129,17 @@ connected arrangement — shorter wirelength at the same zero-overlap legality.<
 <img class="fig half" src="fig_layout_ibm18.png" alt="ibm18 reference vs ours">
 
 <h3>The optimization in motion</h3>
-<p>The differentiable global stage starts from a random spread and, under the back-loaded schedule, pulls
-connected macros together; the layout is then legalized to zero overlap and greedy-polished against the
-exact metric. Both animations replay the <i>actual winning run</i> (config 221 with its winning seed) and
-close on the saved final placement. Left: <b>ibm01</b>, a small design (final proxy 0.784). Right:
-<b>ibm17</b>, a large, congestion-bound design (1.205) — where the macros visibly negotiate a denser canvas.</p>
+<p>Each animation replays that benchmark's <i>actual winning run</i> — its winning config and random seed —
+and closes on the saved final placement. <b>Left panel:</b> the differentiable global stage starts from a
+random spread and, under the back-loaded schedule, pulls connected macros together; the layout is then
+legalized to zero overlap and greedy-polished against the exact metric. <b>Right panel:</b> the true proxy
+cost at every frame, with a moving dot — you can watch it plunge as the layout clusters, then step down
+again in the legalize + greedy stage (shaded). The four span the design space: <b>ibm01</b> (small, 0.784),
+<b>ibm09</b> (medium, 0.797), <b>ibm17</b> (large, congestion-bound, 1.205), <b>ibm18</b> (large, 1.185).</p>
 <img class="fig half" src="opt_ibm01.gif" alt="ibm01 optimization animation">
+<img class="fig half" src="opt_ibm09.gif" alt="ibm09 optimization animation">
 <img class="fig half" src="opt_ibm17.gif" alt="ibm17 optimization animation">
+<img class="fig half" src="opt_ibm18.gif" alt="ibm18 optimization animation">
 
 <h2>What made the difference: multi-start beats a lucky seed</h2>
 <p>Single-seed scores carry ~2% noise, larger than the gap between good configurations. Ranking configs by

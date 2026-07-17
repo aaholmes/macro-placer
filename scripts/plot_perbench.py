@@ -17,13 +17,14 @@ pb = {r["benchmark"]: min(r["best_after"], r["greedy_ref"]) for r in rep["rows"]
 
 ours = [pb[nm] for nm in order]
 refs = [ref[nm] for nm in order]
-avg_ours = float(np.mean(ours)); avg_ref = float(np.mean(refs)); lb1 = 0.9507
+avg_ours = float(np.mean(ours)); avg_ref = float(np.mean(refs))
 x = np.arange(len(order)); w = 0.4
 
+# NOTE: no leaderboard line here — the leaderboard only publishes an AVERAGE (0.9507),
+# not per-benchmark scores, so drawing it per-benchmark would be misleading.
 fig, ax = plt.subplots(figsize=(11, 4.2))
-ax.bar(x - w / 2, refs, w, label=f"reference (avg {avg_ref:.3f})", color="#cbd5e1")
+ax.bar(x - w / 2, refs, w, label=f"reference — shipped placement (avg {avg_ref:.3f})", color="#cbd5e1")
 ax.bar(x + w / 2, ours, w, label=f"ours (avg {avg_ours:.4f})", color="#16a34a")
-ax.axhline(lb1, ls="--", lw=1, color="#b91c1c", label=f"leaderboard #1 avg ({lb1})")
 ax.set_xticks(x); ax.set_xticklabels([nm.replace("ibm", "") for nm in order])
 ax.set_xlabel("IBM benchmark"); ax.set_ylabel("proxy cost (lower is better)")
 ax.set_title(f"Final proxy per benchmark — avg {avg_ours:.4f} (−{100*(1-avg_ours/avg_ref):.0f}% vs reference, zero overlaps)")

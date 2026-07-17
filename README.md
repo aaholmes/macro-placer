@@ -120,10 +120,12 @@ Hard macros as rectangles (color = area); soft cell-clusters as light dots. The 
 
 ![ibm01 reference vs ours](notes/fig_layout_ibm01.png)
 
-The differentiable optimization in motion — random spread → clustered under the back-loaded schedule → legalized → greedy-polished. Each replays the actual winning run (config 221, winning seed) and ends on the saved final placement. Left/top **ibm01** (small, proxy 0.784); right/bottom **ibm17** (large, congestion-bound, 1.205).
+The differentiable optimization in motion, with a live proxy-score curve — random spread → clustered under the back-loaded schedule → legalized → greedy-polished. Each replays that benchmark's actual winning run (its winning config + seed) and ends on the saved final placement; the right panel's dot tracks the true proxy at every frame. Spanning the design space: **ibm01** (small, 0.784), **ibm09** (medium, 0.797), **ibm17** (large/congestion-bound, 1.205), **ibm18** (large, 1.185).
 
 ![ibm01 optimization](notes/opt_ibm01.gif)
+![ibm09 optimization](notes/opt_ibm09.gif)
 ![ibm17 optimization](notes/opt_ibm17.gif)
+![ibm18 optimization](notes/opt_ibm18.gif)
 
 ---
 

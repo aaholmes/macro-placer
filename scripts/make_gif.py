@@ -126,9 +126,9 @@ imgs = []
 for i, (pos, label, py) in enumerate(frames):
     fig, (axL, axM, axR) = plt.subplots(1, 3, figsize=(14.2, 4.9),
                                         gridspec_kw={"width_ratios": [1, 1, 1.2]}, constrained_layout=True)
-    draw_place(axL, ref_pos, f"reference — shipped (proxy {ref_proxy:.3f})")
-    draw_place(axM, pos, f"{nm}: {label}")
-    # right: proxy curve (log-y) with moving dot + reference line
+    draw_place(axL, ref_pos, f"reference  (score {ref_proxy:.3f})")
+    draw_place(axM, pos, f"{nm}: {label}   ·   score {py:.3f}")
+    # right: score curve (log-y) with moving dot + reference line
     axR.axvspan(n_detail - 0.5, len(frames) - 0.5, color="#fde68a", alpha=0.5, lw=0)
     axR.axhline(ref_proxy, ls="--", lw=1.2, color="#b91c1c", zorder=1)
     axR.text(len(frames) - 1, ref_proxy, "reference ", color="#b91c1c", fontsize=8.5, va="bottom", ha="right")
@@ -137,8 +137,8 @@ for i, (pos, label, py) in enumerate(frames):
     axR.scatter([i], [py], s=60, color="#dc2626", zorder=4, ec="white", lw=0.8)
     axR.set_yscale("log"); axR.set_xlim(-0.5, len(frames) - 0.5); axR.set_ylim(ylo, yhi)
     axR.set_xlabel("frame  (global placement → legalize + greedy)", fontsize=9)
-    axR.set_ylabel("true proxy cost (log)", fontsize=10)
-    axR.set_title(f"proxy = {py:.3f}", fontsize=11)
+    axR.set_ylabel("score (log)", fontsize=10)
+    axR.set_title(f"score = {py:.3f}", fontsize=11)
     axR.grid(alpha=0.25, which="both")
     fig.canvas.draw()
     imgs.append(Image.fromarray(np.asarray(fig.canvas.buffer_rgba())[..., :3].copy()))

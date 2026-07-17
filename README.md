@@ -2,16 +2,16 @@
 
 A solver for the [Partcl/HRT Macro Placement Challenge](https://github.com/partcleda/macro-place-challenge-2026), plus the experiments and findings that shaped it. A **differentiable global placer** (any smooth loss) produces a good layout, a legalizer removes all overlap, and **greedy detailed placement** polishes against the exact metric. Built on a from-scratch evaluator that is **exact to the reference metric but ~50–3600× faster**, which turns the search into something you can actually iterate on.
 
-**Result: average proxy 1.0155 across all 17 IBM benchmarks (zero overlaps) — 31% below the reference placement, and a new personal best.** Full write-up with plots: [`notes/solution.html`](notes/solution.html).
+**Result: average score 1.0155 across all 17 IBM benchmarks (zero overlaps) — 31% below the reference placement, and a new personal best.** Full write-up with plots: [`notes/solution.html`](notes/solution.html).
 
 ---
 
 ## The problem in one minute
 
-Place large fixed blocks ("macros") on a chip canvas to minimize a **proxy cost**, with **zero overlaps** and under **1 hour per benchmark**:
+Place large fixed blocks ("macros") on a chip canvas to minimize a **score**, with **zero overlaps** and under **1 hour per benchmark**:
 
 ```
-proxy = 1.0 · wirelength + 0.5 · density + 0.5 · congestion   (lower is better)
+score = 1.0 · wirelength + 0.5 · density + 0.5 · congestion   (lower is better)
 ```
 
 - **wirelength** — total half-perimeter of all nets (wires want connected macros close → clustering)
@@ -20,7 +20,7 @@ proxy = 1.0 · wirelength + 0.5 · density + 0.5 · congestion   (lower is bette
 
 The three objectives fight each other, the search space is ~10^800, and there are two macro types:
 - **hard macros** — fixed-size rectangles you position (strict zero overlap);
-- **soft macros** — standard-cell clusters, movable and allowed to overlap (a density/congestion proxy).
+- **soft macros** — standard-cell clusters, movable and allowed to overlap (a density/congestion stand-in).
 
 Scoring is over 17 IBM benchmarks. Baselines (same metric): **RePlAce 1.4578**, **SA 2.1251** (17-benchmark averages).
 
@@ -42,7 +42,7 @@ Congestion deposits, per net, one unit of routing demand along an **L-route skel
 max_i x_i ≈  γ · log Σ_i e^{ x_i/γ},   min_i x_i ≈ −γ · log Σ_i e^{−x_i/γ}      (exact as γ→0)
 ```
 
-density by a differentiable **overflow** penalty `Σ_b max(0, ρ_b − ρ*)²` over soft cell-assignments, and the objective follows a **back-loaded homotopy**: with normalized time `t∈[0,1]` and effective progress `τ(t)=t^p` (`p≈3.8`), `γ` and the term weights anneal from smooth/weak to sharp/strong on `τ` — start spread and forgiving, tighten late. Adam optimizes the free macro centers; `place_multistart` keeps the best of *N* random seeds. The loss is pluggable — any differentiable objective drops into the same engine (this is what let us test the congestion surrogates in the appendix).
+density by a differentiable **overflow** penalty `Σ_b max(0, ρ_b − ρ*)²` over soft cell-assignments, and the objective follows a **back-loaded homotopy**: with normalized time `t∈[0,1]` and effective progress `τ(t)=t^p` (`p≈3.8`), `γ` and the term weights anneal from smooth/weak to sharp/strong on `τ` — start spread and forgiving, tighten late. Adam optimizes the free macro centers; `place_multistart` keeps the best of *N* random seeds. The loss is pluggable — any differentiable objective drops into the same engine (this is what let me test the congestion surrogates in the appendix).
 
 ---
 
@@ -66,7 +66,7 @@ Two ideas: **make evaluation cheap so you can search hard**, and **combine a dif
 ```
 
 ### 1. `fast_eval.py` — a validated, fast reimplementation of the metric
-The official evaluator is pure-Python and takes ~1 s per evaluation. We reimplemented it in vectorized NumPy and **validated each term against the ground truth**:
+The official evaluator is pure-Python and takes ~1 s per evaluation. I reimplemented it in vectorized NumPy and **validated each term against the ground truth**:
 
 | term | accuracy vs official | speed |
 |------|---------------------|-------|
@@ -75,16 +75,16 @@ The official evaluator is pure-Python and takes ~1 s per evaluation. We reimplem
 | congestion | ~10⁻⁵ in the search regime | 37 ms (was 430 ms) |
 
 ### 2. Incremental single-move evaluation — the engine
-Local search changes **one macro at a time**, so we keep the per-net wirelength, the density grid, and the routing arrays as live state and update only what a move touches. Result: **0.96 ms/move vs 52 ms full recompute (55×), exact to 2×10⁻¹⁶**, with correct undo. Also supports **orientation flips** (Klein-4) incrementally. This is what makes deep search (10⁵–10⁶ moves) feasible in seconds.
+Local search changes **one macro at a time**, so I keep the per-net wirelength, the density grid, and the routing arrays as live state and update only what a move touches. Result: **0.96 ms/move vs 52 ms full recompute (55×), exact to 2×10⁻¹⁶**, with correct undo. Also supports **orientation flips** (Klein-4) incrementally. This is what makes deep search (10⁵–10⁶ moves) feasible in seconds.
 
 ### 3. `legalizer.py` — guaranteed zero overlap
 Three stages: vectorized push-apart → strict-gated Gauss-Seidel cleanup (never worsens) → relocate-to-empty finisher. **All 17 benchmarks reach strict zero overlap.**
 
 ### 4. `analytical.py` — the differentiable global placer (GPU)
-Macro centers are free coordinates optimized by Adam against a **smooth surrogate** of the proxy: per-net **log-sum-exp** wirelength and an **overflow density** penalty (plus optional soft-top-k RUDY congestion and an electrostatic-FFT density mode). A **back-loaded homotopy schedule** — start spread and weakly constrained, ramp the weights up sharply late — avoids the local minima a fully-on objective falls into. The loss is pluggable, so the same engine optimizes any differentiable objective. `place_multistart` keeps the best of N random inits.
+Macro centers are free coordinates optimized by Adam against a **smooth surrogate** of the score: per-net **log-sum-exp** wirelength and an **overflow density** penalty (plus optional soft-top-k RUDY congestion and an electrostatic-FFT density mode). A **back-loaded homotopy schedule** — start spread and weakly constrained, ramp the weights up sharply late — avoids the local minima a fully-on objective falls into. The loss is pluggable, so the same engine optimizes any differentiable objective. `place_multistart` keeps the best of N random inits.
 
 ### 5. `local_search.py` — exact-metric detailed placement
-Greedy hill-climbing over single-macro moves, accepting only true-proxy improvements. Warm-started from the global placement, it closes the gap between the smooth surrogate (plus legalization) and the real metric. Co-optimizes **soft macros** (the key lever) and preserves hard-macro legality. Also includes SA, orientation flips, congruent swaps, and an operator-portfolio variant.
+Greedy hill-climbing over single-macro moves, accepting only true-score improvements. Warm-started from the global placement, it closes the gap between the smooth surrogate (plus legalization) and the real metric. Co-optimizes **soft macros** (the key lever) and preserves hard-macro legality. Also includes SA, orientation flips, congruent swaps, and an operator-portfolio variant.
 
 ### 6. Tuning & validation pipeline
 - `bayes_search.py` — Bayesian (TPE) search over the loss weights and schedule on 3 representative designs, minimizing mean ratio-to-reference; a `--finalize` stage re-scores the top configs under **best-of-16 multi-start** to pick the winner above the seed-noise floor.
@@ -104,7 +104,7 @@ Differentiable global placement → legalize → greedy polish, applied to all 1
 
 | metric | value |
 |--------|-------|
-| **average proxy (abs, over 17)** | **1.0155** |
+| **average score (abs, over 17)** | **1.0155** |
 | vs reference (1.4772) | **−31%** (mean per-benchmark ratio 0.692) |
 | vs RePlAce (1.4578) | **−30%** |
 | vs SA (2.1251) | **−52%** |
@@ -112,11 +112,11 @@ Differentiable global placement → legalize → greedy polish, applied to all 1
 | overlaps | 0 (all 17) |
 | best single benchmark (ibm01) | **0.784** |
 
-Every benchmark beats the reference; on the easiest designs (ibm01 0.78, ibm09 0.81) we dip below the current leaderboard leader's *average* (0.9507). The 14 held-out designs generalize as well as the 3 used for tuning. Greedy from the reference alone averages **1.083**; the differentiable global stage supplies a **6.2%** better basin on top of that. The score comes from a best-of-*N*-after-greedy pool over the top-5 tuned configs (each wins some benchmarks: trial 221 wins 6, 87 wins 5, 95 wins 3, 222 wins 2, 97 wins 1) plus the greedy-from-reference floor.
+Every benchmark beats the reference; on the easiest designs (ibm01 0.78, ibm09 0.81) I dip below the current leaderboard leader's *average* (0.9507). The 14 held-out designs generalize as well as the 3 used for tuning. Greedy from the reference alone averages **1.083**; the differentiable global stage supplies a **6.2%** better basin on top of that. The score comes from a best-of-*N*-after-greedy pool over the top-5 tuned configs (each wins some benchmarks: trial 221 wins 6, 87 wins 5, 95 wins 3, 222 wins 2, 97 wins 1) plus the greedy-from-reference floor.
 
 ### The optimization in motion
 
-Each animation replays that benchmark's actual winning run (its winning config + seed) as a three-panel strip: the **reference** shipped placement (left), our **differentiable global stage** animating random-spread → clustered → legalized → greedy-polished (middle), and the **true proxy cost per frame** on a log axis with the reference score as a dashed line (right) — the curve dives below it. Hard macros are rectangles (color = area); soft cell-clusters are light dots. Spanning the design space: **ibm01** (small, 0.784), **ibm09** (medium, 0.797), **ibm17** (large/congestion-bound, 1.205), **ibm18** (large, 1.185).
+Each animation replays that benchmark's actual winning run (its winning config + seed) as a three-panel strip: the **reference** shipped placement (left), my **differentiable global stage** animating random-spread → clustered → legalized → greedy-polished (middle), and the **true score per frame** on a log axis with the reference score as a dashed line (right) — the curve dives below it. Hard macros are rectangles (color = area); soft cell-clusters are light dots. Spanning the design space: **ibm01** (small, 0.784), **ibm09** (medium, 0.797), **ibm17** (large/congestion-bound, 1.205), **ibm18** (large, 1.185).
 
 ![ibm01 optimization](notes/opt_ibm01.gif)
 ![ibm09 optimization](notes/opt_ibm09.gif)
@@ -129,9 +129,9 @@ Each animation replays that benchmark's actual winning run (its winning config +
 
 These shaped the approach and are worth as much as the score:
 
-1. **The proxy is soft-macro-dominated.** ~98% of our gain comes from co-optimizing soft macros; moving hard macros changes the proxy by only ~0.2%. Great for Tier-1 ranking, but a caveat for the real objective (at Tier-2, only hard-macro positions survive).
-2. **Congestion is the wall.** At our best point it's 57% of the remaining cost and the term local search reduces least — because it depends on discrete *routing*, not a smooth function of positions.
-3. **Congestion is best optimized implicitly, not as an explicit loss term.** The metric is non-differentiable, so we built two congestion surrogates — a RUDY penalty and a faithful, non-gameable **L-route** surrogate that correlates 0.94–0.99 with the true metric (appendix). *Neither improves the final score when added to the global loss.* Across four schedules — persistent, late, congestion-first, and a low-congestion warm-start — the paired effect on the post-greedy proxy is neutral-to-negative. Greedy detailed placement already minimizes the *true* congestion directly, and an explicit global term mostly trades away wirelength for an arrangement greedy would have reached anyway. Congestion falls out of good wirelength + spreading + exact-metric polish; forcing it earlier hurts.
+1. **The score is soft-macro-dominated.** ~98% of my gain comes from co-optimizing soft macros; moving hard macros changes the score by only ~0.2%. Great for Tier-1 ranking, but a caveat for the real objective (at Tier-2, only hard-macro positions survive).
+2. **Congestion is the wall.** At my best point it's 57% of the remaining cost and the term local search reduces least — because it depends on discrete *routing*, not a smooth function of positions.
+3. **Congestion is best optimized implicitly, not as an explicit loss term.** The metric is non-differentiable, so I built two congestion surrogates — a RUDY penalty and a faithful, non-gameable **L-route** surrogate that correlates 0.94–0.99 with the true metric (appendix). *Neither improves the final score when added to the global loss.* Across four schedules — persistent, late, congestion-first, and a low-congestion warm-start — the paired effect on the post-greedy score is neutral-to-negative. Greedy detailed placement already minimizes the *true* congestion directly, and an explicit global term mostly trades away wirelength for an arrangement greedy would have reached anyway. Congestion falls out of good wirelength + spreading + exact-metric polish; forcing it earlier hurts.
 4. **A differentiable global stage + greedy detail beats either alone.** Greedy from the reference averages 1.083; the differentiable global placer supplies a better starting basin, and global+greedy reaches **1.0155** (a 6.2% better basin than greedy-from-reference). The global stage optimizes a *surrogate* and is then legalized, so greedy — working on the *exact* metric — does most of the absolute-quality cleanup on top of the global output.
 5. **Multi-start matters more than tuning precision.** Single-seed scores carry ~2% noise, larger than the gap between good configs, so single-seed rankings are unreliable — the search's apparent-best config was a lucky seed. Re-scoring the top configs at best-of-16 reshuffled the order (a config ranked 5th won) and lowered the score ~6%. The final pick is always made under multi-seed evaluation.
 6. **The tuned config generalizes.** Bayesian search on 3 designs, applied unchanged to the other 14, does equally well on the held-out set — no per-benchmark overfitting.
@@ -162,21 +162,21 @@ uv run python scripts/fullrun_report.py                               # per-benc
 
 ## What would push toward the top of the leaderboard
 
-We sit ~7% above the leaders (~0.95 avg), and the gap concentrates on the hard, congestion-bound designs (ibm08/17). Two intuitive levers we can now **rule out** (appendix): a better congestion term in the global loss, and a congestion-directed detailed placer — both are neutral-to-negative in paired tests, because the proxy is soft-cell-dominated and greedy already owns congestion.
+I sit ~7% above the leaders (~0.95 avg), and the gap concentrates on the hard, congestion-bound designs (ibm08/17). Two intuitive levers I can now **rule out** (appendix): a better congestion term in the global loss, and a congestion-directed detailed placer — both are neutral-to-negative in paired tests, because the score is soft-cell-dominated and greedy already owns congestion.
 
 What remains is structural. Single-cell greedy at zero temperature plateaus against congestion because relieving a hot region requires moving *groups* of cells coherently, not one point at a time — any single move that vacates a congested cell lengthens its own nets and is rejected. The lever is therefore a detailed placer that makes **coordinated, multi-cell moves** (or runs under a temperature that accepts transient wirelength increases), so it can restructure the global arrangement rather than locally polish it. That — not more hyperparameter tuning or more congestion modeling — is where the remaining gap lives.
 
 ---
 
-## Appendix: what we tried that isn't in the final pipeline
+## Appendix: what I tried that isn't in the final pipeline
 
 The negative results constrain the design as much as the positive ones. Each was evaluated with **paired** experiments (identical seeds across arms, differencing per seed) to cancel the ~2–6% seed noise that otherwise swamps these effects.
 
 **Congestion surrogates in the global loss.**
 - *RUDY.* Routing demand modeled as a net's bounding-box footprint spread over its cells. Differentiable and cheap, but **gameable**: deposited demand scales as `1/bbox-area`, so the optimizer lowers the surrogate by *spreading* nets while the true L-route congestion rises. It diverges from the metric (correlation ≈ 0); abandoned.
-- *L-route surrogate.* A faithful, non-gameable differentiable version of the true metric: a partition-of-unity soft row/column assignment (`softrow`) and a sigmoid-product segment occupancy (`softseg`) deposit demand on the L-route skeleton; the top-5% mean is a bisection **soft-top-k**. It correlates **0.94–0.99** with the true congestion. Added to the global loss under four schedules — **persistent**, **late** (ramped on `τ`), **congestion-first** (congestion at `t=0`, WL/density ramped in afterward), and as a **low-congestion warm-start** (a congestion+spread pre-phase before the standard schedule). Paired isolation tests on the hard designs came back **neutral-to-negative** on the post-greedy proxy every time (e.g. the low-congestion warm-start: +0.09 proxy, 0/4 seeds — the warm-started descent lands in a *worse* basin). Mechanism: greedy optimizes true congestion directly, so the global term adds no capability it lacks while corrupting the wirelength basin it starts from. A "scatter" (anti-clustered) warm-start leaned slightly positive but sat inside the n=4 noise band.
+- *L-route surrogate.* A faithful, non-gameable differentiable version of the true metric: a partition-of-unity soft row/column assignment (`softrow`) and a sigmoid-product segment occupancy (`softseg`) deposit demand on the L-route skeleton; the top-5% mean is a bisection **soft-top-k**. It correlates **0.94–0.99** with the true congestion. Added to the global loss under four schedules — **persistent**, **late** (ramped on `τ`), **congestion-first** (congestion at `t=0`, WL/density ramped in afterward), and as a **low-congestion warm-start** (a congestion+spread pre-phase before the standard schedule). Paired isolation tests on the hard designs came back **neutral-to-negative** on the post-greedy score every time (e.g. the low-congestion warm-start: +0.09 score, 0/4 seeds — the warm-started descent lands in a *worse* basin). Mechanism: greedy optimizes true congestion directly, so the global term adds no capability it lacks while corrupting the wirelength basin it starts from. A "scatter" (anti-clustered) warm-start leaned slightly positive but sat inside the n=4 noise band.
 
-**Congestion-directed detailed placement.** A move operator that sends hot-cell macros toward cold grid cells sampled from the live congestion field — the discrete analogue of a congestion gradient — with acceptance still on the exact proxy. Paired against baseline greedy it was **negative**: teleport-to-cold moves lengthen the moved cell's own nets and get rejected, so they waste the fixed move budget; zero-temperature single-cell descent cannot express the coordinated moves congestion relief actually needs (this is what motivates the "coordinated moves" conclusion above).
+**Congestion-directed detailed placement.** A move operator that sends hot-cell macros toward cold grid cells sampled from the live congestion field — the discrete analogue of a congestion gradient — with acceptance still on the exact score. Paired against baseline greedy it was **negative**: teleport-to-cold moves lengthen the moved cell's own nets and get rejected, so they waste the fixed move budget; zero-temperature single-cell descent cannot express the coordinated moves congestion relief actually needs (this is what motivates the "coordinated moves" conclusion above).
 
 **Concurrent / interleaved global+detailed.** Alternating chunks of Adam steps and greedy moves — every confound-controlled variant, including SA-style acceptance and matched compute — never beats the phase-separated global-then-greedy pipeline. The two stages are genuinely separated: the global stage sets the coarse arrangement, greedy does the exact-metric detail.
 

@@ -4,11 +4,9 @@
 <meta charset="utf-8">
 <title>Macro Placement — Solution Write-up</title>
 <style>
-  body{font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1e293b;
-       max-width:900px;margin:2rem auto;padding:0 1rem}
-  /* wide strip figures (the 3-panel gifs) break out beyond the text column */
-  .wide{display:block;width:min(1340px,97vw);position:relative;left:50%;transform:translateX(-50%);
-        margin:.7rem 0;border:1px solid #e2e8f0;border-radius:4px}
+  body{font:14px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1e293b;
+       max-width:min(1340px,96vw);margin:1.5rem auto;padding:0 .6rem}
+  .wide{display:block;width:100%;margin:.7rem 0;border:1px solid #e2e8f0;border-radius:4px}
   h1{font-size:1.5rem;margin:.2rem 0}
   h2{font-size:1.1rem;margin:1.4rem 0 .4rem;border-bottom:1px solid #e2e8f0;padding-bottom:.2rem}
   h3{font-size:.98rem;margin:1rem 0 .3rem}
@@ -33,7 +31,7 @@
 
 <h1>Macro Placement on the IBM/ICCAD04 Benchmarks</h1>
 <p class="sub">A differentiable global placer + greedy detailed placement, tuned by Bayesian search.
-Proxy cost = 1.0·wirelength + 0.5·density + 0.5·congestion (lower is better; zero macro overlap required).</p>
+Score = 1.0·wirelength + 0.5·density + 0.5·congestion (lower is better; zero macro overlap required).</p>
 
 <p>
 <span class="kpi"><b>0.692</b> mean ratio vs reference (−31%)</span>
@@ -41,17 +39,24 @@ Proxy cost = 1.0·wirelength + 0.5·density + 0.5·congestion (lower is better; 
 <span class="kpi">0 overlaps, all 17</span>
 </p>
 
-<p>Starting from the placement each benchmark ships with (avg proxy <b>1.477</b>), our pipeline reaches
-an average proxy of <b>1.0155</b> across all 17 designs — a <b>31% improvement</b> — with zero overlaps
-everywhere. On the easiest designs we dip below the current leaderboard leader's <i>average</i>
-(ibm01 0.78, ibm09 0.80 vs 0.9507); the hard, congestion-bound designs (ibm08/17/18) keep our overall
+<p>Starting from the placement each benchmark ships with (avg score <b>1.477</b>), my pipeline reaches
+an average score of <b>1.0155</b> across all 17 designs — a <b>31% improvement</b> — with zero overlaps
+everywhere. On the easiest designs I dip below the current leaderboard leader's <i>average</i>
+(ibm01 0.78, ibm09 0.80 vs 0.9507); the hard, congestion-bound designs (ibm08/17/18) keep my overall
 average ~7% above the top score.</p>
 
-<p>Each animation below replays an <i>actual winning run</i>. Three panels: the <b>reference</b> placement
-shipped with the benchmark; our <b>differentiable global stage</b> animating from a random spread to a
-clustered layout (then legalized and greedy-polished); and the <b>true proxy cost</b> per frame on a log
-axis, where the dashed red line is the reference score — watch the curve dive below it.</p>
+<p>Each animation replays an <i>actual winning run</i>. Three panels: the <b>reference</b> placement
+shipped with the benchmark; my <b>differentiable global stage</b> animating from a random spread to a
+clustered layout (then legalized and greedy-polished); and the <b>true score</b> per frame on a log axis,
+where the dashed red line is the reference score — watch the curve dive below it. Hard macros are drawn as
+rectangles (color = area, log scale), soft cell-clusters as light dots. The four span the design space:
+<b>ibm01</b> (small, 0.784), <b>ibm09</b> (medium, 0.797), <b>ibm17</b> (large, congestion-bound, 1.205),
+<b>ibm18</b> (large, 1.185) — in every case the reference wastes canvas while my result packs macros
+compactly, and the score dives below the reference line.</p>
 <img class="wide" src="opt_ibm01.gif" alt="ibm01: reference | optimization | score curve">
+<img class="wide" src="opt_ibm09.gif" alt="ibm09: reference | optimization | score curve">
+<img class="wide" src="opt_ibm17.gif" alt="ibm17: reference | optimization | score curve">
+<img class="wide" src="opt_ibm18.gif" alt="ibm18: reference | optimization | score curve">
 
 <img class="fig" src="fig_perbench.png" alt="per-benchmark comparison">
 
@@ -61,8 +66,8 @@ operates directly on the true score.</p>
 
 <h3>1 · Differentiable global placement</h3>
 <p>Macro centers are free 2-D coordinates optimized by gradient descent (Adam) against a
-<i>smooth surrogate</i> of the proxy — the key trick is that the real objective (Manhattan wirelength,
-top-k density, overlap) is non-differentiable, so we replace each term with a differentiable relaxation:</p>
+<i>smooth surrogate</i> of the score — the key trick is that the real objective (Manhattan wirelength,
+top-k density, overlap) is non-differentiable, so I replace each term with a differentiable relaxation:</p>
 <ul>
   <li><b>Wirelength</b> → per-net <i>log-sum-exp</i> of pin coordinates, a smooth max that approaches
       true half-perimeter wirelength as a sharpness parameter <code>gamma</code> grows.</li>
@@ -83,7 +88,7 @@ macros as little as possible. Output: a zero-overlap placement on every benchmar
 <h3>3 · Greedy detailed placement</h3>
 <p>The differentiable stage optimizes a <i>surrogate</i>; the legalizer then perturbs it. A greedy local
 search closes that gap by proposing single-macro moves and accepting only those that lower the <b>true</b>
-proxy (evaluated incrementally for speed). It touches soft macros only, so hard-macro legality is preserved.
+score (evaluated incrementally for speed). It touches soft macros only, so hard-macro legality is preserved.
 This stage does most of the absolute-quality work.</p>
 
 <h3>Multi-start + best-of-N</h3>
@@ -111,9 +116,9 @@ mean ratio-to-reference so no single design dominates. The winning configuration
 </table>
 
 <h2>Results — every benchmark vs the reference</h2>
-<p class="note">ratio = ours / reference; &lt;1 beats the shipped placement. †=used for tuning; all others are held out.</p>
+<p class="note">ratio = mine / reference; &lt;1 beats the shipped placement. †=used for tuning; all others are held out.</p>
 <table>
-<thead><tr><th>design</th><th>reference</th><th>ours</th><th>ratio</th><th>design</th><th>reference</th><th>ours</th><th>ratio</th></tr></thead>
+<thead><tr><th>design</th><th>reference</th><th>mine</th><th>ratio</th><th>design</th><th>reference</th><th>mine</th><th>ratio</th></tr></thead>
 <tbody>
 <tr><td>ibm01†</td><td>1.039</td><td>0.784</td><td class="win">0.755</td><td>ibm11</td><td>1.214</td><td>0.858</td><td class="win">0.707</td></tr>
 <tr><td>ibm02</td><td>1.566</td><td>0.996</td><td class="win">0.636</td><td>ibm12</td><td>1.625</td><td>1.186</td><td class="win">0.730</td></tr>
@@ -126,18 +131,8 @@ mean ratio-to-reference so no single design dominates. The winning configuration
 <tr><td>ibm10</td><td>1.337</td><td>1.027</td><td class="win">0.768</td><td><b>AVG</b></td><td><b>1.477</b></td><td><b>1.0155</b></td><td class="win"><b>0.692</b></td></tr>
 </tbody>
 </table>
-<p>We beat the reference on <b>all 17</b>. Crucially, the 14 held-out designs (mean ratio 0.71) do as well
+<p>I beat the reference on <b>all 17</b>. Crucially, the 14 held-out designs (mean ratio 0.71) do as well
 as the 3 tuning designs — the tuned configuration <b>generalizes</b> and is not overfit to ibm01/13/17.</p>
-
-<h2>More designs, in motion</h2>
-<p>The same three-panel view across the design space — hard macros as rectangles (color = area, log scale),
-soft cell-clusters as light dots. In every case the reference (left) scatters macros with large dead
-regions while our result packs them into a compact, connected arrangement, and the proxy curve (right)
-dives below the reference line. <b>ibm09</b> (medium, 0.797), <b>ibm17</b> (large, congestion-bound, 1.205),
-<b>ibm18</b> (large, 1.185).</p>
-<img class="wide" src="opt_ibm09.gif" alt="ibm09: reference | optimization | score curve">
-<img class="wide" src="opt_ibm17.gif" alt="ibm17: reference | optimization | score curve">
-<img class="wide" src="opt_ibm18.gif" alt="ibm18: reference | optimization | score curve">
 
 <h2>What made the difference: multi-start beats a lucky seed</h2>
 <p>Single-seed scores carry ~2% noise, larger than the gap between good configurations. Ranking configs by
@@ -161,10 +156,10 @@ single-seed leader.</p>
       bounding boxes, which raises wirelength and real congestion. Turned off in the winning config.</li>
   <li><b>Spread-first only / cluster-first only schedules</b> — the tuned back-loaded homotopy beats both
       fixed extremes.</li>
-  <li><b>Hard-macro moves &amp; connected-cluster swaps in local search</b> — the proxy is almost insensitive
+  <li><b>Hard-macro moves &amp; connected-cluster swaps in local search</b> — the score is almost insensitive
       to hard-macro perturbation on these designs (~0.2%); soft co-optimization dominates, so soft-only greedy
       is both faster and as good.</li>
-  <li><b>Discrete orientation (rotation/flip) optimization</b> — negligible proxy effect; deferred.</li>
+  <li><b>Discrete orientation (rotation/flip) optimization</b> — negligible score effect; deferred.</li>
 </ul>
 
 <h3>Search trajectory</h3>

@@ -1,6 +1,8 @@
 # GPU-era Macro Placement — Solver & Analysis
 
-A solver for the [Partcl/HRT Macro Placement Challenge](https://github.com/partcleda/macro-place-challenge-2026), plus the experiments and findings that shaped it. A **differentiable global placer** (any smooth loss) produces a good layout, a legalizer removes all overlap, and **greedy detailed placement** polishes against the exact metric. Built on a from-scratch evaluator that is **exact to the reference metric but ~50–3600× faster**, which turns the search into something you can actually iterate on.
+**Macro placement** is an early step in chip physical design: positioning the large fixed blocks — memories and IP cores — on the die before the millions of small standard cells are placed around them. Because those blocks dominate wirelength, routability, and congestion, where they go is one of the highest-leverage and hardest steps to automate.
+
+This is a solver for the [Partcl/HRT Macro Placement Challenge](https://github.com/partcleda/macro-place-challenge-2026) — which ranks placers on 17 IBM/ICCAD04 benchmarks by a single cost (wirelength + density + congestion) with zero macro overlap — plus the experiments and findings that shaped it. A **differentiable global placer** (any smooth loss) produces a good layout from a random start, a legalizer removes all overlap, and **greedy detailed placement** polishes against the exact metric. Built on a from-scratch evaluator that is **exact to the reference metric but ~50–3600× faster**, which turns the search into something you can actually iterate on.
 
 **Result: average score 1.0155 across all 17 IBM benchmarks (zero overlaps) — 31% below the reference placement, and a new personal best.** Full write-up with plots: [`notes/solution.html`](notes/solution.html).
 
@@ -116,7 +118,7 @@ Every benchmark beats the reference; on the easiest designs (ibm01 0.78, ibm09 0
 
 ### The optimization in motion
 
-Each animation replays that benchmark's actual winning run (its winning config + seed) as a three-panel strip: the **reference** shipped placement (left), my **differentiable global stage** animating random-spread → clustered → legalized → greedy-polished (middle), and the **true score per frame** on a log axis with the reference score as a dashed line (right) — the curve dives below it. Hard macros are rectangles (color = area); soft cell-clusters are light dots. Spanning the design space: **ibm01** (small, 0.784), **ibm09** (medium, 0.797), **ibm17** (large/congestion-bound, 1.205), **ibm18** (large, 1.185).
+Each animation replays that benchmark's actual winning run (its winning config + seed) as a three-panel strip: the **reference** placement (left), my **differentiable global stage** animating random-spread → clustered → legalized → greedy-polished (middle), and the **true score per frame** on a log axis with the reference score as a dashed line (right) — the curve dives below it. Hard macros are rectangles (color = area); soft cell-clusters are light dots. Spanning the design space: **ibm01** (small, 0.784), **ibm09** (medium, 0.797), **ibm17** (large/congestion-bound, 1.205), **ibm18** (large, 1.185).
 
 ![ibm01 optimization](notes/opt_ibm01.gif)
 ![ibm09 optimization](notes/opt_ibm09.gif)

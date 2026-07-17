@@ -33,20 +33,28 @@
 <p class="sub">A differentiable global placer + greedy detailed placement, tuned by Bayesian search.
 Score = 1.0·wirelength + 0.5·density + 0.5·congestion (lower is better; zero macro overlap required).</p>
 
+<p><b>What this is.</b> Macro placement is an early step in chip physical design: positioning the large
+fixed blocks — memories and IP cores — on the die before the millions of small standard cells are placed
+around them. Because those blocks dominate wirelength, routability, and congestion, where they go is one of
+the highest-leverage and hardest steps to automate. This challenge scores a placer on 17 IBM/ICCAD04
+benchmarks by the single cost above, requiring zero macro overlap; what follows is my solver and what I
+learned building it.</p>
+
 <p>
 <span class="kpi"><b>0.692</b> mean ratio vs reference (−31%)</span>
 <span class="kpi"><b>1.0155</b> abs. avg over 17</span>
 <span class="kpi">0 overlaps, all 17</span>
 </p>
 
-<p>Starting from the placement each benchmark ships with (avg score <b>1.477</b>), my pipeline reaches
-an average score of <b>1.0155</b> across all 17 designs — a <b>31% improvement</b> — with zero overlaps
-everywhere. On the easiest designs I dip below the current leaderboard leader's <i>average</i>
+<p>Each benchmark comes with a reference macro placement (avg score <b>1.477</b>). Placing from <i>random</i>
+initialization — not from that reference — my pipeline reaches an average score of <b>1.0155</b> across all
+17 designs, <b>31% below the reference</b>, with zero overlaps everywhere. On the easiest designs I dip
+below the current leaderboard leader's <i>average</i>
 (ibm01 0.78, ibm09 0.80 vs 0.9507); the hard, congestion-bound designs (ibm08/17/18) keep my overall
 average ~7% above the top score.</p>
 
 <p>Each animation replays an <i>actual winning run</i>. Three panels: the <b>reference</b> placement
-shipped with the benchmark; my <b>differentiable global stage</b> animating from a random spread to a
+provided with the benchmark; my <b>differentiable global stage</b> animating from a random spread to a
 clustered layout (then legalized and greedy-polished); and the <b>true score</b> per frame on a log axis,
 where the dashed red line is the reference score — watch the curve dive below it. Hard macros are drawn as
 rectangles (color = area, log scale), soft cell-clusters as light dots. The four span the design space:
@@ -116,7 +124,7 @@ mean ratio-to-reference so no single design dominates. The winning configuration
 </table>
 
 <h2>Results — every benchmark vs the reference</h2>
-<p class="note">ratio = mine / reference; &lt;1 beats the shipped placement. †=used for tuning; all others are held out.</p>
+<p class="note">ratio = mine / reference; &lt;1 beats the reference placement. †=used for tuning; all others are held out.</p>
 <table>
 <thead><tr><th>design</th><th>reference</th><th>mine</th><th>ratio</th><th>design</th><th>reference</th><th>mine</th><th>ratio</th></tr></thead>
 <tbody>

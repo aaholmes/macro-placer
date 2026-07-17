@@ -45,9 +45,25 @@ loss_fn = proxy_loss(gamma_hi_mult=hp["gamma"], lam_d0=hp["lam_d_end"] * hp["lam
                      dmode=hp["dmode"], lam_wl0=hp["lam_wl0"], lam_wl1=1.0, ramp_p=hp["ramp_p"],
                      legalize_steps=hp["lsteps"])
 
-# --- run the differentiable optimization, snapshotting positions ---
-iters = hp["iters"]
-g = torch.Generator(device="cpu").manual_seed(0)
+# --- discover the ACTUAL winning candidate for this benchmark, so the animation
+# reproduces the run that produced the reported score (winning config + init seed)
+# and closes on the SAVED winning placement rather than an unrelated re-polish ---
+import glob
+FR = f"{NOTES}/fullrun"
+WIN_ITERS = 15000     # iters used by the full run (fullrun_place --iters 15000)
+cands = [(json.load(open(f))["final"], json.load(open(f))["idx"])
+         for f in glob.glob(f"{FR}/{nm}_p*_final.json")
+         if os.path.exists(f.replace("_final.json", "_polished.npz"))]
+win_final, win_idx = min(cands)
+wmeta = {e["idx"]: e for e in json.load(open(f"{FR}/{nm}_meta.json"))}[win_idx]
+assert wmeta["trial"] == json.load(open(f"{NOTES}/bayes_final.json"))["trial"], \
+    f"{nm} winner is trial {wmeta['trial']}, not the bayes_final config — load that config instead"
+init_seed = wmeta["seed"] * 101 + wmeta["config_i"]   # exactly what fullrun_place passed to P.place
+iters = WIN_ITERS
+STRIDE = max(80, iters // 60)     # ~60 trajectory frames regardless of iters
+
+# --- replay the winning global-placement trajectory from its exact init, snapshotting ---
+g = torch.Generator(device="cpu").manual_seed(init_seed)
 c0 = torch.rand(b.num_macros, 2, generator=g)
 c0[:, 0] = c0[:, 0] * (P.W - 2) + 1; c0[:, 1] = c0[:, 1] * (P.H - 2) + 1
 coord = c0.to(P.dev).requires_grad_(True)
@@ -60,17 +76,16 @@ for it in range(iters):
         coord[:, 0].clamp_(P.hw, P.W - P.hw); coord[:, 1].clamp_(P.hh, P.H - P.hh)
     if it % STRIDE == 0:
         frames.append((coord.detach().cpu().numpy().copy(), f"global placement — step {it}/{iters}"))
-final = coord.detach().cpu().numpy()
-frames.append((final.copy(), f"global placement — step {iters}/{iters}"))
 
-# --- closing frames: legalize THIS run, then greedy-polish THIS placement, so the
-# animation stays one continuous trajectory (soft-only polish leaves hard macros put) ---
-legal, _, _ = legalize(final, sz, nh, b.canvas_width, b.canvas_height, gap=0.01)
+# --- closing frames from the SAVED winning artifacts (the exact placement scoring win_final) ---
+diff_cand = np.load(f"{FR}/{nm}_p{win_idx}.npz")["placement"].astype(np.float64)
+frames.append((diff_cand.copy(), f"global placement — step {iters}/{iters}"))
+legal, _, _ = legalize(diff_cand, sz, nh, b.canvas_width, b.canvas_height, gap=0.01)
 frames.append((legal.copy(), "legalized (zero overlap)"))
-polished, _ = optimize_fast(fe, legal, iters=200000, seed=0, T0=0.0,
-                            move_hard=False, move_soft=True, refresh=200000,
-                            log_every=200001, logf=lambda *a: None)
-frames.append((polished.copy(), "greedy-polished (final)"))
+polished = np.load(f"{FR}/{nm}_p{win_idx}_polished.npz")["placement"].astype(np.float64)
+frames.append((polished.copy(), f"greedy-polished — proxy {win_final:.3f}"))
+print(f"{nm}: winning idx={win_idx} trial={wmeta['trial']} seed={wmeta['seed']} "
+      f"init_seed={init_seed} final={win_final:.4f}", flush=True)
 
 # --- render frames to a GIF ---
 areas = sz[:nh, 0] * sz[:nh, 1]

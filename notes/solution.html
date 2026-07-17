@@ -128,11 +128,14 @@ connected arrangement — shorter wirelength at the same zero-overlap legality.<
 <img class="fig half" src="fig_layout_ibm09.png" alt="ibm09 reference vs ours">
 <img class="fig half" src="fig_layout_ibm18.png" alt="ibm18 reference vs ours">
 
-<h3>The optimization in motion (ibm01)</h3>
+<h3>The optimization in motion</h3>
 <p>The differentiable global stage starts from a random spread and, under the back-loaded schedule, pulls
 connected macros together; the layout is then legalized to zero overlap and greedy-polished against the
-exact metric.</p>
+exact metric. Both animations replay the <i>actual winning run</i> (config 221 with its winning seed) and
+close on the saved final placement. Left: <b>ibm01</b>, a small design (final proxy 0.784). Right:
+<b>ibm17</b>, a large, congestion-bound design (1.205) — where the macros visibly negotiate a denser canvas.</p>
 <img class="fig half" src="opt_ibm01.gif" alt="ibm01 optimization animation">
+<img class="fig half" src="opt_ibm17.gif" alt="ibm17 optimization animation">
 
 <h2>What made the difference: multi-start beats a lucky seed</h2>
 <p>Single-seed scores carry ~2% noise, larger than the gap between good configurations. Ranking configs by

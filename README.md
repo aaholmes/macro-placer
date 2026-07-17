@@ -120,9 +120,10 @@ Hard macros as rectangles (color = area); soft cell-clusters as light dots. The 
 
 ![ibm01 reference vs ours](notes/fig_layout_ibm01.png)
 
-The differentiable optimization in motion (ibm01): random spread → clustered under the back-loaded schedule → legalized → greedy-polished.
+The differentiable optimization in motion — random spread → clustered under the back-loaded schedule → legalized → greedy-polished. Each replays the actual winning run (config 221, winning seed) and ends on the saved final placement. Left/top **ibm01** (small, proxy 0.784); right/bottom **ibm17** (large, congestion-bound, 1.205).
 
 ![ibm01 optimization](notes/opt_ibm01.gif)
+![ibm17 optimization](notes/opt_ibm17.gif)
 
 ---
 

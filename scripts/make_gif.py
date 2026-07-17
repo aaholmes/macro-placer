@@ -97,37 +97,49 @@ frames.append((legal.copy(), "legalized (zero overlap)", proxy_of(legal)))
 polished = np.load(f"{FR}/{nm}_p{win_idx}_polished.npz")["placement"].astype(np.float64)
 frames.append((polished.copy(), "greedy-polished (final)", win_final))
 
-# --- render two-panel frames: placement (left) + live proxy curve (right) ---
+# --- reference (shipped) placement, shown static in the first column + as a line in the curve ---
+ref_pos, _, _ = legalize(b.macro_positions.numpy().astype(np.float64), sz, nh,
+                         b.canvas_width, b.canvas_height, gap=0.01)
+ref_proxy = proxy_of(ref_pos)
+
+# --- render three-panel frames: reference | animating placement | live proxy curve ---
 areas = sz[:nh, 0] * sz[:nh, 1]
 cnorm = mcolors.LogNorm(vmin=areas.min(), vmax=areas.max())
 ys = [f[2] for f in frames]
 xs = list(range(len(frames)))
 n_detail = len(frames) - 2        # index where the detailed stage (legalize+polish) begins
-ymax = max(ys) * 1.03; ymin = min(ys) * 0.97
-imgs = []
-for i, (pos, label, py) in enumerate(frames):
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(9.6, 5.0),
-                                   gridspec_kw={"width_ratios": [1, 1]}, constrained_layout=True)
-    # left: placement
-    axL.add_patch(Rectangle((0, 0), b.canvas_width, b.canvas_height, fill=False, ec="black", lw=1.2))
-    axL.scatter(pos[nh:, 0], pos[nh:, 1], s=2, c="0.7", alpha=0.35)
+ylo = min(ys) * 0.9; yhi = max(max(ys), ref_proxy) * 1.1
+
+
+def draw_place(ax, pos, title):
+    ax.add_patch(Rectangle((0, 0), b.canvas_width, b.canvas_height, fill=False, ec="black", lw=1.2))
+    ax.scatter(pos[nh:, 0], pos[nh:, 1], s=2, c="0.7", alpha=0.35)
     for k in range(nh):
         w, h = sz[k]; x, y = pos[k, 0], pos[k, 1]
-        axL.add_patch(Rectangle((x - w / 2, y - h / 2), w, h,
-                                facecolor=cm.viridis(cnorm(areas[k])), alpha=0.85, ec="none"))
-    axL.set_xlim(-1, b.canvas_width + 1); axL.set_ylim(-1, b.canvas_height + 1)
-    axL.set_aspect("equal"); axL.set_xticks([]); axL.set_yticks([])
-    axL.set_title(f"{nm}: {label}", fontsize=11)
-    # right: proxy curve with moving dot
+        ax.add_patch(Rectangle((x - w / 2, y - h / 2), w, h,
+                               facecolor=cm.viridis(cnorm(areas[k])), alpha=0.85, ec="none"))
+    ax.set_xlim(-1, b.canvas_width + 1); ax.set_ylim(-1, b.canvas_height + 1)
+    ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([]); ax.set_title(title, fontsize=10.5)
+
+
+imgs = []
+for i, (pos, label, py) in enumerate(frames):
+    fig, (axL, axM, axR) = plt.subplots(1, 3, figsize=(14.2, 4.9),
+                                        gridspec_kw={"width_ratios": [1, 1, 1.2]}, constrained_layout=True)
+    draw_place(axL, ref_pos, f"reference — shipped (proxy {ref_proxy:.3f})")
+    draw_place(axM, pos, f"{nm}: {label}")
+    # right: proxy curve (log-y) with moving dot + reference line
     axR.axvspan(n_detail - 0.5, len(frames) - 0.5, color="#fde68a", alpha=0.5, lw=0)
-    axR.plot(xs, ys, color="0.75", lw=1.3, zorder=1)
-    axR.plot(xs[:i + 1], ys[:i + 1], color="#2563eb", lw=1.8, zorder=2)
-    axR.scatter([i], [py], s=60, color="#dc2626", zorder=3, ec="white", lw=0.8)
-    axR.set_xlim(-0.5, len(frames) - 0.5); axR.set_ylim(ymin, ymax)
+    axR.axhline(ref_proxy, ls="--", lw=1.2, color="#b91c1c", zorder=1)
+    axR.text(len(frames) - 1, ref_proxy, "reference ", color="#b91c1c", fontsize=8.5, va="bottom", ha="right")
+    axR.plot(xs, ys, color="0.75", lw=1.3, zorder=2)
+    axR.plot(xs[:i + 1], ys[:i + 1], color="#2563eb", lw=1.9, zorder=3)
+    axR.scatter([i], [py], s=60, color="#dc2626", zorder=4, ec="white", lw=0.8)
+    axR.set_yscale("log"); axR.set_xlim(-0.5, len(frames) - 0.5); axR.set_ylim(ylo, yhi)
     axR.set_xlabel("frame  (global placement → legalize + greedy)", fontsize=9)
-    axR.set_ylabel("true proxy cost", fontsize=10)
+    axR.set_ylabel("true proxy cost (log)", fontsize=10)
     axR.set_title(f"proxy = {py:.3f}", fontsize=11)
-    axR.grid(alpha=0.25)
+    axR.grid(alpha=0.25, which="both")
     fig.canvas.draw()
     imgs.append(Image.fromarray(np.asarray(fig.canvas.buffer_rgba())[..., :3].copy()))
     plt.close(fig)

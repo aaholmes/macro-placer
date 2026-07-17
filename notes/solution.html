@@ -5,7 +5,10 @@
 <title>Macro Placement — Solution Write-up</title>
 <style>
   body{font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1e293b;
-       max-width:820px;margin:2rem auto;padding:0 1.2rem}
+       max-width:900px;margin:2rem auto;padding:0 1rem}
+  /* wide strip figures (the 3-panel gifs) break out beyond the text column */
+  .wide{display:block;width:min(1340px,97vw);position:relative;left:50%;transform:translateX(-50%);
+        margin:.7rem 0;border:1px solid #e2e8f0;border-radius:4px}
   h1{font-size:1.5rem;margin:.2rem 0}
   h2{font-size:1.1rem;margin:1.4rem 0 .4rem;border-bottom:1px solid #e2e8f0;padding-bottom:.2rem}
   h3{font-size:.98rem;margin:1rem 0 .3rem}
@@ -43,6 +46,12 @@ an average proxy of <b>1.0155</b> across all 17 designs — a <b>31% improvement
 everywhere. On the easiest designs we dip below the current leaderboard leader's <i>average</i>
 (ibm01 0.78, ibm09 0.80 vs 0.9507); the hard, congestion-bound designs (ibm08/17/18) keep our overall
 average ~7% above the top score.</p>
+
+<p>Each animation below replays an <i>actual winning run</i>. Three panels: the <b>reference</b> placement
+shipped with the benchmark; our <b>differentiable global stage</b> animating from a random spread to a
+clustered layout (then legalized and greedy-polished); and the <b>true proxy cost</b> per frame on a log
+axis, where the dashed red line is the reference score — watch the curve dive below it.</p>
+<img class="wide" src="opt_ibm01.gif" alt="ibm01: reference | optimization | score curve">
 
 <img class="fig" src="fig_perbench.png" alt="per-benchmark comparison">
 
@@ -120,26 +129,15 @@ mean ratio-to-reference so no single design dominates. The winning configuration
 <p>We beat the reference on <b>all 17</b>. Crucially, the 14 held-out designs (mean ratio 0.71) do as well
 as the 3 tuning designs — the tuned configuration <b>generalizes</b> and is not overfit to ibm01/13/17.</p>
 
-<h2>Placement layouts</h2>
-<p>Hard macros are drawn as rectangles (color = area, log scale); soft standard-cell clusters are the light
-dots. The reference scatters macros loosely with large dead regions; our result packs them into a compact,
-connected arrangement — shorter wirelength at the same zero-overlap legality.</p>
-<img class="fig" src="fig_layout_ibm01.png" alt="ibm01 reference vs ours">
-<img class="fig half" src="fig_layout_ibm09.png" alt="ibm09 reference vs ours">
-<img class="fig half" src="fig_layout_ibm18.png" alt="ibm18 reference vs ours">
-
-<h3>The optimization in motion</h3>
-<p>Each animation replays that benchmark's <i>actual winning run</i> — its winning config and random seed —
-and closes on the saved final placement. <b>Left panel:</b> the differentiable global stage starts from a
-random spread and, under the back-loaded schedule, pulls connected macros together; the layout is then
-legalized to zero overlap and greedy-polished against the exact metric. <b>Right panel:</b> the true proxy
-cost at every frame, with a moving dot — you can watch it plunge as the layout clusters, then step down
-again in the legalize + greedy stage (shaded). The four span the design space: <b>ibm01</b> (small, 0.784),
-<b>ibm09</b> (medium, 0.797), <b>ibm17</b> (large, congestion-bound, 1.205), <b>ibm18</b> (large, 1.185).</p>
-<img class="fig half" src="opt_ibm01.gif" alt="ibm01 optimization animation">
-<img class="fig half" src="opt_ibm09.gif" alt="ibm09 optimization animation">
-<img class="fig half" src="opt_ibm17.gif" alt="ibm17 optimization animation">
-<img class="fig half" src="opt_ibm18.gif" alt="ibm18 optimization animation">
+<h2>More designs, in motion</h2>
+<p>The same three-panel view across the design space — hard macros as rectangles (color = area, log scale),
+soft cell-clusters as light dots. In every case the reference (left) scatters macros with large dead
+regions while our result packs them into a compact, connected arrangement, and the proxy curve (right)
+dives below the reference line. <b>ibm09</b> (medium, 0.797), <b>ibm17</b> (large, congestion-bound, 1.205),
+<b>ibm18</b> (large, 1.185).</p>
+<img class="wide" src="opt_ibm09.gif" alt="ibm09: reference | optimization | score curve">
+<img class="wide" src="opt_ibm17.gif" alt="ibm17: reference | optimization | score curve">
+<img class="wide" src="opt_ibm18.gif" alt="ibm18: reference | optimization | score curve">
 
 <h2>What made the difference: multi-start beats a lucky seed</h2>
 <p>Single-seed scores carry ~2% noise, larger than the gap between good configurations. Ranking configs by

@@ -114,13 +114,9 @@ Differentiable global placement → legalize → greedy polish, applied to all 1
 
 Every benchmark beats the reference; on the easiest designs (ibm01 0.78, ibm09 0.81) we dip below the current leaderboard leader's *average* (0.9507). The 14 held-out designs generalize as well as the 3 used for tuning. Greedy from the reference alone averages **1.083**; the differentiable global stage supplies a **6.2%** better basin on top of that. The score comes from a best-of-*N*-after-greedy pool over the top-5 tuned configs (each wins some benchmarks: trial 221 wins 6, 87 wins 5, 95 wins 3, 222 wins 2, 97 wins 1) plus the greedy-from-reference floor.
 
-### Placement layouts
+### The optimization in motion
 
-Hard macros as rectangles (color = area); soft cell-clusters as light dots. The reference scatters macros with dead space; ours packs them into a compact, connected arrangement at the same zero-overlap legality.
-
-![ibm01 reference vs ours](notes/fig_layout_ibm01.png)
-
-The differentiable optimization in motion, with a live proxy-score curve — random spread → clustered under the back-loaded schedule → legalized → greedy-polished. Each replays that benchmark's actual winning run (its winning config + seed) and ends on the saved final placement; the right panel's dot tracks the true proxy at every frame. Spanning the design space: **ibm01** (small, 0.784), **ibm09** (medium, 0.797), **ibm17** (large/congestion-bound, 1.205), **ibm18** (large, 1.185).
+Each animation replays that benchmark's actual winning run (its winning config + seed) as a three-panel strip: the **reference** shipped placement (left), our **differentiable global stage** animating random-spread → clustered → legalized → greedy-polished (middle), and the **true proxy cost per frame** on a log axis with the reference score as a dashed line (right) — the curve dives below it. Hard macros are rectangles (color = area); soft cell-clusters are light dots. Spanning the design space: **ibm01** (small, 0.784), **ibm09** (medium, 0.797), **ibm17** (large/congestion-bound, 1.205), **ibm18** (large, 1.185).
 
 ![ibm01 optimization](notes/opt_ibm01.gif)
 ![ibm09 optimization](notes/opt_ibm09.gif)

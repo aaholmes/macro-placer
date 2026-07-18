@@ -23,11 +23,6 @@
   .note{color:#64748b;font-size:.82rem}
   ul{margin:.3rem 0 .3rem 0;padding-left:1.2rem}
   li{margin:.15rem 0}
-  .kpi{display:inline-block;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;
-       padding:.3rem .7rem;margin:.2rem .4rem .2rem 0;font-size:.9rem}
-  .caveat{background:#fffbeb;border:1px solid #fde68a;border-left:3px solid #f59e0b;
-          border-radius:5px;padding:.6rem .9rem;margin:.9rem 0}
-  .caveat h3{margin-top:.3rem}
   @media print{body{margin:0}h2{page-break-after:avoid}table{page-break-inside:avoid}}
 </style>
 </head>
@@ -37,46 +32,29 @@
 <p class="sub">A differentiable global placer + greedy detailed placement, tuned by Bayesian search.
 Score = 1.0·wirelength + 0.5·density + 0.5·congestion (lower is better; zero macro overlap required).</p>
 
-<p><b>What this is.</b> Macro placement is an early step in chip physical design: positioning the large
-fixed blocks — memories and IP cores — on the die before the millions of small standard cells are placed
-around them. Because those blocks dominate wirelength, routability, and congestion, where they go is one of
-the highest-leverage and hardest steps to automate. This challenge scores a placer on 17 IBM/ICCAD04
-benchmarks by the single cost above, requiring zero macro overlap; what follows is my solver and what I
-learned building it.</p>
+<p><b>What this is.</b> Macro placement positions the large fixed blocks — memories, IP cores — on a chip
+before the millions of standard cells fill in around them. Those blocks dominate wirelength and congestion,
+so it's one of the highest-leverage steps in physical design. This challenge scores a placer on 17
+IBM/ICCAD04 benchmarks by the cost above, at zero macro overlap. Below is my solver and what I learned.</p>
 
-<p>
-<span class="kpi"><b>1.0155</b> avg score over 17 (mean ratio 0.692 vs reference)</span>
-<span class="kpi">beats the reference on all 17</span>
-<span class="kpi">0 overlaps</span>
-</p>
+<p><b>Result.</b> From <i>random</i> starting placements, my pipeline averages <b>1.0155</b> over all 17 —
+<b>31% below</b> the reference placement provided with each benchmark (avg 1.477, a RePlAce-quality baseline;
+RePlAce itself scores 1.458), beating it on every design with zero overlaps. The design goal was generality:
+the global placer optimizes <b>any differentiable loss</b>, so wirelength, density, congestion, or a custom
+objective all drop into the same GPU engine unchanged.</p>
 
-<p>Each benchmark comes with a reference macro placement (avg score <b>1.477</b>). Placing from <i>random</i>
-initialization — not from that reference — my pipeline beats it on <b>all 17</b> designs with zero overlaps,
-averaging <b>1.0155</b> (best-of-<i>N</i> over the tuned configs). A central design goal is generality: the
-placer optimizes <b>any differentiable loss</b> — wirelength, density, congestion, or a custom objective all
-drop into the same GPU engine unchanged.</p>
+<p class="note"><b>Compute.</b> A candidate takes ~3–6 min (GPU global stage ~80 s + CPU polish 1–5 min),
+inside the challenge's 1-hour-per-benchmark limit. The 1.0155 is best-of-<i>N</i> (16–40 candidates each); one
+candidate alone averages 1.105, and best-of-<i>N</i> fits the budget with a batched/parallel harness (I ran it
+across sessions instead). <b>Scope:</b> the score is soft-macro-dominated — co-optimizing the movable
+standard-cell clusters drives ~98% of the gain, hard-macro moves ~0.2% — so it measures soft-cell placement
+more than hard-macro placement.</p>
 
-<p class="note"><b>Compute.</b> A single candidate takes ~3–6 min on a desktop (measured: 15k-iteration GPU
-global stage ~80 s; CPU greedy polish 105 s on the smallest design, 308 s on the largest) — inside the
-challenge's 1-hour-per-benchmark limit. The 1.0155 figure is best-of-<i>N</i> (16–40 candidates/benchmark);
-at those per-candidate costs a GPU-batched, 16-core-parallel-polish harness fits it inside the limit too,
-though I generated the candidates across sessions rather than as one budgeted job. A single median candidate
-averages <b>1.105</b>; the rest is multi-start.</p>
-
-<p class="note"><b>Scope.</b> The metric is soft-macro-dominated: co-optimizing the standard-cell clusters
-drives ~98% of the gain, while perturbing hard-macro positions moves the score ~0.2%. That is the right play
-for this proxy metric, but the number reflects soft-cell placement more than hard-macro placement — the
-challenge target is proxy cost; the downstream Tier-2 timing flow, which would weight the hard macros more,
-is out of scope here.</p>
-
-<p>Each animation replays an <i>actual winning run</i>. Three panels: the <b>reference</b> placement
-provided with the benchmark; my <b>differentiable global stage</b> animating from a random spread to a
-clustered layout (then legalized and greedy-polished); and the <b>true score</b> per frame on a log axis,
-where the dashed red line is the reference score — watch the curve dive below it. Hard macros are drawn as
-rectangles (color = area, log scale), soft cell-clusters as light dots. The four span the design space:
-<b>ibm01</b> (small, 0.784), <b>ibm09</b> (medium, 0.797), <b>ibm17</b> (large, congestion-bound, 1.205),
-<b>ibm18</b> (large, 1.185) — in every case the reference wastes canvas while my result packs macros
-compactly, and the score dives below the reference line.</p>
+<p>The four animations below replay actual winning runs, three panels each: the <b>reference</b> placement;
+my <b>global stage</b> animating random spread → clustered (then legalized and greedy-polished); and the
+<b>score</b> per frame (log axis, dashed line = reference) diving below the reference. Hard macros are
+rectangles (color = area), soft clusters are dots. Small to large — <b>ibm01</b> 0.784, <b>ibm09</b> 0.797,
+<b>ibm17</b> 1.205, <b>ibm18</b> 1.185 — in each, the reference wastes canvas and mine packs it.</p>
 <img class="wide" src="opt_ibm01.gif" alt="ibm01: reference | optimization | score curve">
 <img class="wide" src="opt_ibm09.gif" alt="ibm09: reference | optimization | score curve">
 <img class="wide" src="opt_ibm17.gif" alt="ibm17: reference | optimization | score curve">
@@ -84,49 +62,44 @@ compactly, and the score dives below the reference line.</p>
 
 <img class="fig" src="fig_perbench.png" alt="per-benchmark comparison">
 
-<h2>How the placer works</h2>
-<p>The pipeline has three stages. The first is continuous and gradient-based; the last is discrete and
-operates directly on the true score.</p>
+<h2>How it works</h2>
+<p>Three stages: a continuous gradient-based global placer, a legalizer, then a discrete search on the true
+score.</p>
 
 <h3>1 · Differentiable global placement</h3>
-<p>Macro centers are free 2-D coordinates optimized by gradient descent (Adam) against a
-<i>smooth surrogate</i> of the score — the key trick is that the real objective (Manhattan wirelength,
-top-k density, overlap) is non-differentiable, so I replace each term with a differentiable relaxation:</p>
+<p>Macro centers are free 2-D coordinates, optimized by Adam against a <i>smooth surrogate</i> of the score
+(the real terms — Manhattan wirelength, top-<i>k</i> density — are non-differentiable):</p>
 <ul>
-  <li><b>Wirelength</b> → per-net <i>log-sum-exp</i> of pin coordinates, a smooth max that approaches
-      true half-perimeter wirelength as a sharpness parameter <code>gamma</code> grows.</li>
-  <li><b>Density</b> → cells splatted onto a grid; an <i>overflow</i> penalty pushes the grid toward a
-      target fill so macros spread out instead of piling up.</li>
-  <li><b>Overlap</b> is not penalized in the loss; it is removed afterward by a dedicated legalizer.</li>
+  <li><b>Wirelength</b> → per-net log-sum-exp of pin coordinates: a smooth max that approaches true HPWL as
+      the sharpness <code>gamma</code> grows.</li>
+  <li><b>Density</b> → macros splatted onto a grid, with an <i>overflow</i> penalty toward a target fill.</li>
+  <li><b>Overlap</b> → not in the loss; removed afterward by the legalizer.</li>
 </ul>
-<p>Qualitatively the optimization runs a <b>homotopy schedule</b>: it starts loose and weakly-constrained,
-lets the netlist's attractive forces gather connected macros, and only in the final phase ramps the
-wirelength and density weights up sharply to snap the layout into a compact, legal-ish arrangement. This
-"spread first, tighten late" order (controlled by <code>ramp_p</code>≈3.8) avoids the local minima that a
-fully-on objective falls into from the first step.</p>
+<p>The schedule is a <b>homotopy</b>: start loose so connected macros gather, then ramp the weights up late
+to snap into a compact arrangement. This "spread first, tighten late" order (<code>ramp_p</code>≈3.8) avoids
+the local minima a fully-on objective hits from step one. The loss is pluggable — this is what let me test
+the congestion surrogates in the appendix.</p>
 
 <h3>2 · Legalization</h3>
-<p>Three stages: a vectorized push-apart pass, a strictly-gated Gauss-Seidel cleanup that never worsens the
-score, and a relocate-to-empty finisher for anything still overlapping. Macros move as little as possible.
-Output: strict zero overlap on every one of the 17 benchmarks.</p>
+<p>Vectorized push-apart → strictly-gated cleanup (never worsens the score) → relocate-to-empty finisher,
+moving macros as little as possible. Strict zero overlap on all 17.</p>
 
 <h3>3 · Greedy detailed placement</h3>
-<p>The differentiable stage optimizes a <i>surrogate</i>; the legalizer then perturbs it. A greedy local
-search closes that gap by proposing single-macro moves and accepting only those that lower the <b>true</b>
-score (evaluated incrementally for speed). It touches soft macros only, so hard-macro legality is preserved.
-This stage does most of the absolute-quality work — which is also why the score is soft-macro-dominated.</p>
+<p>The surrogate plus legalizer leave a gap to the true score. A greedy search closes it: single-macro moves,
+accepting only true-score improvements (evaluated incrementally, ~1 ms/move on an exact-but-fast
+reimplementation of the metric). It moves soft macros only, so hard-macro legality holds. This stage does
+most of the absolute-quality work — a 6.2% better basin than greedy-from-reference — and is why the score is
+soft-macro-dominated.</p>
 
-<h3>Multi-start + best-of-N</h3>
-<p>Random-init variance is large, so each design is placed from many seeds and the best-scoring result is
-kept — worth ~6% on its own (see below), and the difference between the single-candidate 1.105 and the
-best-of-<i>N</i> 1.0155. Best-of-<i>N</i> saturates (log-diminishing), so past a few dozen candidates the
-gains flatten.</p>
+<h3>Multi-start</h3>
+<p>Random-init variance is large (~6%), so I place each design from many seeds and keep the best — the gap
+between the single-candidate 1.105 and best-of-<i>N</i> 1.0155. Best-of-<i>N</i> saturates (log-diminishing):
+past a few dozen candidates the gains flatten.</p>
 
-<h2>Hyperparameters (the tuned configuration)</h2>
-<p>All continuous weights and schedules were tuned by Bayesian optimization (Tree-structured Parzen
-Estimator, ~230 trials) on three representative designs (ibm01/13/17, easy/medium/hard), minimizing the
-mean ratio-to-reference so no single design dominates. The winner is <b>trial 221</b>, picked under
-best-of-16 multi-start:</p>
+<h2>The tuned configuration</h2>
+<p>Weights and schedule were tuned by Bayesian optimization (TPE, ~230 trials) on 3 designs (ibm01/13/17,
+easy/medium/hard), minimizing mean ratio-to-reference so no design dominates. Winner: <b>trial 221</b>, picked
+under best-of-16 multi-start.</p>
 <table>
 <thead><tr><th>parameter</th><th>value</th><th style="text-align:left">meaning</th></tr></thead>
 <tbody>
@@ -144,13 +117,10 @@ best-of-16 multi-start:</p>
 </tbody>
 </table>
 
-<h3>Why <code>iters</code> differs between tuning and deployment</h3>
-<p>The 5000 in the tuned config is an artifact of the search, not a finding. I capped <code>iters</code> at
-5000 during Bayesian optimization purely for throughput — ~230 trials × 3 designs × seeds is only affordable
-with a short budget, and the cap let the search explore the <i>shape</i> of the loss (weights, schedule,
-sharpness) cheaply. The search duly pushed <code>iters</code> to its upper bound, which is the classic sign
-that the bound, not the optimum, is binding. So when deploying the tuned weights for real placements I
-tripled it to <b>15000</b>. Sweeping it afterward on the three tuning designs (post-greedy score):</p>
+<h3>Why <code>iters</code> jumps 5k → 15k</h3>
+<p>The 5000-iteration cap was for search throughput, not a finding — and the search pushed <code>iters</code>
+to that bound, the classic sign the bound is binding. So I tripled it to 15000 for real placements. Post-greedy
+sweep on the tuning designs:</p>
 <table>
 <thead><tr><th>iters</th><th>ibm01</th><th>ibm09</th><th>ibm17</th></tr></thead>
 <tbody>
@@ -159,17 +129,12 @@ tripled it to <b>15000</b>. Sweeping it afterward on the three tuning designs (p
 <tr><td>30 000</td><td>0.795</td><td>0.800</td><td>1.184</td></tr>
 </tbody>
 </table>
-<p>Tripling to 15 k is worth ~1.5–2% on the small and medium designs, at a diff-stage cost that scales roughly
-linearly with iters (~80 s at 15 k). It is not uniformly good: <b>ibm17 gets slightly <i>worse</i></b>
-(1.185→1.213), the one large congestion-bound design in the sweep — consistent with the finding that the
-congestion-bound designs behave differently. Going to 30 k buys almost nothing over 15 k (≤1%), so 15 k is
-the knee. Caveat: these are single-seed numbers against a ~2% seed-noise floor, so the ibm17 regression and
-the 15 k→30 k deltas are inside the noise band; only the 5 k→15 k gain on ibm01/ibm09 is comfortably outside
-it.</p>
+<p>15k is the knee: ~1.5–2% better than 5k on small/medium designs (~80 s of GPU), and 30k adds ≤1%. It isn't
+uniform — <b>ibm17 gets slightly worse</b>, the one large congestion-bound design, echoing the theme that
+those behave differently. (Single-seed against a ~2% noise floor, so only the 5k→15k gain is clearly real.)</p>
 
 <h2>Results — every benchmark vs the reference</h2>
-<p class="note">Best-of-<i>N</i> (unconstrained compute) column. ratio = mine / reference; &lt;1 beats the
-reference placement. †=used for tuning; all others are held out.</p>
+<p class="note">ratio = mine / reference; &lt;1 beats the reference. †=used for tuning; all others held out.</p>
 <table>
 <thead><tr><th>design</th><th>reference</th><th>mine</th><th>ratio</th><th>design</th><th>reference</th><th>mine</th><th>ratio</th></tr></thead>
 <tbody>
@@ -184,157 +149,101 @@ reference placement. †=used for tuning; all others are held out.</p>
 <tr><td>ibm10</td><td>1.337</td><td>1.027</td><td class="win">0.768</td><td><b>AVG</b></td><td><b>1.477</b></td><td><b>1.0155</b></td><td class="win"><b>0.692</b></td></tr>
 </tbody>
 </table>
+<p class="note">1.0155 is best-of-<i>N</i>; a single median candidate averages 1.105 (ratio 0.751). Both beat
+the reference on all 17, and both beat the RePlAce (1.458) and SA (2.125) baselines.</p>
 
-<h3>In context</h3>
-<table>
-<thead><tr><th>configuration</th><th>abs. avg</th><th>mean ratio vs reference</th><th>beats reference</th></tr></thead>
-<tbody>
-<tr><td><b>mine — best-of-<i>N</i></b></td><td><b>1.0155</b></td><td class="win">0.692</td><td>17 / 17</td></tr>
-<tr><td>mine — single median candidate</td><td>1.105</td><td class="win">0.751</td><td>17 / 17</td></tr>
-<tr><td>reference placement</td><td>1.477</td><td>1.000</td><td>—</td></tr>
-<tr><td>RePlAce baseline</td><td>1.458</td><td>—</td><td>—</td></tr>
-<tr><td>SA baseline</td><td>2.125</td><td>—</td><td>—</td></tr>
-</tbody>
-</table>
-<p>Both of my numbers beat the reference on all 17, and both are below the RePlAce (1.458) and SA (2.125)
-baselines. On compute (see the note up top): a single candidate is comfortably inside the 1-hour-per-benchmark
-limit, and best-of-<i>N</i> fits it too with a GPU-batched, parallel-polish harness — deeper best-of-<i>N</i>
-would recover another ~0.5–1.5% before it saturates.</p>
+<h2>What I learned</h2>
+<p><b>Multi-start beats a lucky seed.</b> Single-seed scores carry ~2% noise — bigger than the gap between
+good configs, so the search's single-seed best (trial 95) was luck. Best-of-16 re-scoring reshuffled the top
+five and promoted trial 221, which had ranked 5th on one seed. So the final pick, and every appendix
+experiment, uses paired multi-seed evaluation; un-paired comparisons at this effect size measure seed luck.</p>
+<img class="fig half" src="fig_finalize.png" alt="finalize reshuffle">
 
-<h2 id="generalization">Generalization — the frozen-config check</h2>
-<p>This is the clean held-out check. <code>validate_all.py</code> takes the single frozen winner (trial 221), applies it <b>unchanged</b>
-to all 17 designs at best-of-8 seeds, and does <b>no</b> per-benchmark config selection. This is the
-global stage only — no greedy polish — so it is not comparable to the 1.105/1.0155 figures above; it is an
-apples-to-apples test of whether the <i>tuned configuration</i> transfers off its 3 tuning designs.</p>
+<p><b>It generalizes.</b> The frozen winner (trial 221, global stage only, no per-design selection) applied
+unchanged to all 17: held-out designs come in at 0.923 vs 0.885 on the 3 tuning designs — it transfers, with
+a mild ~4-point overfit. 16 of 17 still beat the reference frozen; only ibm06 needs the full pipeline (its
+frozen ratio is 1.073).</p>
 <table>
 <thead><tr><th>set</th><th>n</th><th>mean ratio vs reference</th></tr></thead>
 <tbody>
 <tr><td>tuning designs (ibm01/13/17)</td><td>3</td><td>0.885</td></tr>
 <tr><td><b>held out</b></td><td>14</td><td><b>0.923</b></td></tr>
-<tr><td>all</td><td>17</td><td>0.916 (abs. avg 1.353 vs reference 1.477)</td></tr>
+<tr><td>all</td><td>17</td><td>0.916</td></tr>
 </tbody>
 </table>
-<p>The tuned configuration <b>transfers</b>: 16 of 17 held-out designs still beat the reference with no
-retuning (13 of the 14 held-out designs, and 16 of all 17). It is not a free lunch: held-out designs come in
-at 0.923 vs 0.885 on the designs the search actually saw — a <b>~4-point penalty</b>, a mild but real overfit
-to ibm01/13/17. And one design, <b>ibm06, is <span class="lose">worse than the
-reference</span></b> under the frozen config (ratio 1.073); it only beats the reference once multi-start and
-greedy polish are added back. "Beats the reference on all 17" is a property of the full pipeline, not of the
-frozen global stage.</p>
 
-<h2>What made the difference: multi-start beats a lucky seed</h2>
-<p>Single-seed scores carry ~2% noise, larger than the gap between good configurations. Ranking configs by
-a single seed is therefore unreliable — the search's apparent best (<b>trial 95</b>) was simply a lucky draw.
-Re-scoring the top five at <b>best-of-16</b> reshuffled the order and promoted <b>trial 221</b>, which had
-ranked only 5th on a single seed, while lowering the score by ~6%. This is why the final pick is made under
-multi-seed evaluation, not by the search's single-seed leader. It is also why every experiment in the
-appendix is <b>paired</b> (identical seeds across arms, differenced per seed): un-paired comparisons at this
-effect size measure seed luck, not the intervention.</p>
-<img class="fig half" src="fig_finalize.png" alt="finalize reshuffle">
+<p><b>Congestion is the wall.</b> At my best point it's 57% of the remaining cost, and the term greedy
+reduces least — it depends on discrete <i>routing</i>, not a smooth function of position. The ~7% gap to the
+leaderboard leaders (~0.9507) sits on the hard, congestion-bound designs (ibm08/17/18).</p>
 
 <h2>Where the remaining gap is</h2>
-<p>The unconstrained score sits ~7% above the leaderboard leaders (~0.9507 avg), and the gap concentrates on
-the hard, congestion-bound designs (ibm08/17/18). Two intuitive levers I can now <b>rule out</b> by paired
-experiment (both detailed in the appendix): a better congestion term in the global loss, and a
-congestion-directed detailed placer. Both are neutral-to-negative, because the score is soft-cell-dominated
-and greedy already minimizes true congestion directly.</p>
-<p>What remains is structural. Congestion is <b>57% of the remaining cost</b> at my best point and the term
-greedy reduces least — because it depends on discrete <i>routing</i>, not a smooth function of positions.
-Single-cell greedy at zero temperature plateaus against it for a specific mechanical reason: relieving a hot
-region requires moving <i>groups</i> of cells coherently, and any single move that vacates a congested cell
-lengthens its own nets and is rejected. The lever is therefore a detailed placer that makes <b>coordinated,
-multi-cell moves</b> (or runs under a temperature that accepts transient wirelength increases), so it can
-restructure the arrangement rather than locally polish it. That — not more hyperparameter tuning and not more
-congestion modeling — is where the remaining gap lives.</p>
+<p>Two obvious levers I ruled out by paired experiment (appendix): an explicit congestion term in the global
+loss, and a congestion-directed greedy. Both are neutral-to-negative — the score is soft-cell-dominated and
+greedy already minimizes true congestion. Single-cell greedy plateaus for a mechanical reason: relieving a
+hot region needs moving <i>groups</i> of cells coherently, but any single move that vacates a congested cell
+lengthens its own nets and is rejected. The lever is a detailed placer with <b>coordinated multi-cell
+moves</b> (or a temperature that accepts transient wirelength increases) — not more tuning, not more
+congestion modeling. The single most useful next measurement is the hard-macro-only score, to separate
+hard-macro placement from soft-cell clustering.</p>
 
-<h2 style="page-break-before:always">Appendix — tried but not used</h2>
-<p>The negative results constrain the design as much as the positive ones. Each was evaluated with
-<b>paired</b> experiments (identical seeds across arms, differencing per seed) to cancel the ~2–6% seed noise
-that otherwise swamps these effects.</p>
+<h2 style="page-break-before:always">Appendix — what didn't work</h2>
+<p>The negative results shaped the design as much as the positive ones. Each is a <b>paired</b> experiment
+(identical seeds across arms, differenced per seed) to cancel the ~2–6% seed noise.</p>
 
 <h3>Congestion surrogates in the global loss</h3>
 <p>The true congestion metric deposits, per net, one unit of routing demand along an <b>L-route skeleton</b>
-(a horizontal segment on the source row, a vertical segment on the sink column) into capacity-normalized
-H/V grids, box-blurs them, and reports <code>abu₅</code> = the mean of the top 5% of cells. It is
-non-differentiable in the macro coordinates twice over — the routing is discrete, and the top-<i>k</i> mean
-is a sort. I built two differentiable surrogates for it:</p>
+(horizontal on the source row, vertical on the sink column) into capacity-normalized grids, box-blurs them,
+and reports <code>abu₅</code> = the mean of the top 5% of cells. It's non-differentiable twice over — discrete
+routing, and a top-<i>k</i> sort. I built two differentiable surrogates:</p>
 <ul>
-  <li><b>RUDY</b> — routing demand as a net's bounding-box footprint spread over its cells. Differentiable
-      and cheap, but <b>gameable</b>: deposited demand scales as <code>1/bbox-area</code>, so the optimizer
-      lowers the surrogate by <i>spreading</i> nets while the true L-route congestion rises. Correlation with
-      the true metric ≈ <b>0</b>. Abandoned.</li>
-  <li><b>L-route surrogate</b> — a faithful, non-gameable differentiable version of the real thing: a
-      partition-of-unity soft row/column assignment (<code>softrow</code>) and a sigmoid-product segment
-      occupancy (<code>softseg</code>) deposit demand on the L-route skeleton, and the top-5% mean becomes a
-      bisection <b>soft-top-k</b>. It correlates <b>0.94–0.99</b> with true congestion — i.e. the surrogate
-      itself works.</li>
+  <li><b>RUDY</b> — demand as a net's bounding-box footprint. Cheap, but <b>gameable</b>: demand scales as
+      <code>1/bbox-area</code>, so the optimizer lowers it by <i>spreading</i> nets while true congestion
+      rises. Correlation with the true metric ≈ <b>0</b>. Abandoned.</li>
+  <li><b>L-route surrogate</b> — faithful and non-gameable: a partition-of-unity soft row/column assignment
+      (<code>softrow</code>) and sigmoid-product segment occupancy (<code>softseg</code>) deposit demand on
+      the skeleton; the top-5% mean becomes a bisection <b>soft-top-k</b>. Correlates <b>0.94–0.99</b> with
+      true congestion — the surrogate itself works.</li>
 </ul>
-<p>The L-route surrogate was then added to the global loss under four schedules: <b>persistent</b>,
-<b>late</b> (ramped on <code>τ</code>), <b>congestion-first</b> (congestion at <code>t=0</code>, WL/density
-ramped in afterward), and as a <b>low-congestion warm-start</b> (a congestion+spread pre-phase before the
-standard schedule). Paired isolation tests on the hard designs came back <b>neutral-to-negative on the
-post-greedy score every time</b> — e.g. the low-congestion warm-start: <b>+0.09 score, 0/4 seeds</b>, the
-warm-started descent lands in a <i>worse</i> basin. A "scatter" (anti-clustered) warm-start leaned slightly
-positive but sat inside the n=4 noise band.</p>
-<p><b>Mechanism:</b> greedy optimizes true congestion directly, so an explicit global term adds no capability
-the pipeline lacks, while corrupting the wirelength basin greedy starts from. Congestion falls out of good
-wirelength + spreading + exact-metric polish; forcing it earlier trades away wirelength for an arrangement
-greedy would have reached anyway. <b>A good surrogate is not the same as a useful one</b> — the L-route term
-is faithful to 0.94–0.99 and still doesn't help.</p>
+<p>Added to the global loss under four schedules — <b>persistent</b>, <b>late</b>, <b>congestion-first</b>,
+and a <b>low-congestion warm-start</b> — paired isolation tests on the hard designs came back
+<b>neutral-to-negative on the post-greedy score every time</b> (e.g. the warm-start: +0.09 score, 0/4 seeds).
+<b>Mechanism:</b> greedy already optimizes true congestion, so an explicit global term adds nothing it lacks
+while corrupting the wirelength basin greedy starts from. A good surrogate is not the same as a useful one —
+the L-route term is faithful to 0.94–0.99 and still doesn't help.</p>
 
 <h3>Congestion-directed detailed placement</h3>
-<p>A move operator that sends hot-cell macros toward cold grid cells sampled from the live congestion field —
-the discrete analogue of a congestion gradient — with acceptance still on the exact score. Paired against
-baseline greedy it was <b>negative</b>: teleport-to-cold moves lengthen the moved cell's own nets and get
-rejected, so they waste the fixed move budget. Zero-temperature single-cell descent cannot express the
-coordinated moves congestion relief actually needs — which is exactly what motivates the "coordinated moves"
-conclusion above.</p>
+<p>A move operator that sends hot-cell macros toward cold grid cells (the discrete analogue of a congestion
+gradient), acceptance still on the exact score. Paired against baseline greedy it was <b>negative</b>:
+teleport-to-cold moves lengthen the moved cell's own nets and get rejected, wasting the move budget.
+Zero-temperature single-cell descent can't express the coordinated moves congestion relief needs — which is
+what motivates the "coordinated moves" conclusion above.</p>
 
 <h3>Concurrent / interleaved global + detailed</h3>
-<p>Alternating chunks of Adam steps and greedy moves. Every confound-controlled variant, including SA-style
+<p>Alternating chunks of Adam steps and greedy moves — every confound-controlled variant, including SA-style
 acceptance and matched compute, <b>never beats</b> the phase-separated global-then-greedy pipeline. The two
-stages are genuinely separable: the global stage sets the coarse arrangement, greedy does the exact-metric
-detail.</p>
+stages are genuinely separable: global sets the coarse arrangement, greedy does the exact-metric detail.</p>
 
 <h3>Other</h3>
 <ul>
-  <li><b>Electrostatic (FFT-Poisson) density field</b> — the ePlace-style global density model. Matched the
-      simpler overflow penalty; not worth the cost.</li>
-  <li><b>LapSum vs soft-max top-k</b> — a differentiable exact-top-k (implicit-function gradient). Helped
-      density-only runs (1.21→1.17) and is used inside the loss, but was not decisive.</li>
-  <li><b>Differentiable in-loss legalization + displacement penalty</b> — resolving overlap inside the loss
-      instead of with an external legalizer. It systematically over-spread the layout (~1.46 vs ~1.14); the
-      external legalizer is better.</li>
-  <li><b>Spread-first only / cluster-first only schedules</b> — the tuned back-loaded homotopy beats both
-      fixed extremes.</li>
-  <li><b>SA and SA/greedy hybrids</b> (greedy-until-<i>N</i>-accepts) — no gain over pure greedy at matched
-      compute.</li>
-  <li><b>Hard-macro moves &amp; connected-cluster swaps in local search</b> — the score is almost insensitive
-      to hard-macro perturbation on these designs (~0.2%); soft co-optimization dominates, so soft-only greedy
-      is both faster and as good — the measurement behind the soft-macro scope note up top.</li>
-  <li><b>Discrete orientation (rotation/flip) optimization</b> — negligible score effect; deferred. (The
-      incremental evaluator supports Klein-4 flips regardless.)</li>
-  <li><b>Multi-start initialization variants</b> (density-only, low-congestion, scatter) — see the
-      warm-start result above.</li>
+  <li><b>Electrostatic (FFT-Poisson) density</b> — the ePlace-style model. Matched the simpler overflow
+      penalty; not worth the cost.</li>
+  <li><b>LapSum exact-top-k</b> — helped density-only runs (1.21→1.17) and is used inside the loss, but wasn't
+      decisive.</li>
+  <li><b>In-loss legalization</b> — resolving overlap inside the loss over-spread the layout (~1.46 vs ~1.14);
+      the external legalizer is better.</li>
+  <li><b>Fixed spread-first / cluster-first schedules</b> — the tuned back-loaded homotopy beats both.</li>
+  <li><b>SA and SA/greedy hybrids</b> — no gain over pure greedy at matched compute.</li>
+  <li><b>Hard-macro moves &amp; cluster swaps</b> — the score is nearly insensitive to hard-macro perturbation
+      (~0.2%); soft-only greedy is faster and as good (the measurement behind the soft-macro scope note).</li>
+  <li><b>Orientation (flip) optimization</b> — negligible score effect; deferred (the evaluator supports
+      Klein-4 flips regardless).</li>
 </ul>
 
 <h3>Search trajectory</h3>
-<p class="note">All ~230 Bayesian-optimization trials. Green = beats the reference. Best-by-single-seed was
-trial 95 — later corrected to trial 221 by best-of-16 re-scoring (above); the search plateaus once config
-differences fall below the seed-noise floor, which is the point at which further tuning stops being the
-bottleneck.</p>
+<p class="note">All ~230 tuning trials. Green beats the reference. Single-seed best was trial 95 — corrected
+to trial 221 by best-of-16 re-scoring; the search plateaus once config differences fall below the
+seed-noise floor.</p>
 <img class="fig" src="bayes_trials.png" alt="bayes search trajectory">
-
-<h3>Bottom line</h3>
-<p>A general, differentiable-loss placer whose tuned configuration transfers across designs: it beats the
-reference on all 17, averaging <b>1.105</b> for a single candidate and <b>1.0155</b> under best-of-<i>N</i>
-multi-start. The differentiable stage supplies a good starting basin (6.2% better than greedy-from-reference),
-and greedy detailed placement does most of the absolute-quality work — almost entirely through soft macros,
-which is why the score is soft-macro-dominated. The remaining ~7% to the leaderboard leaders is <i>not</i> a
-congestion-modeling problem: an explicit congestion term in the global loss and a congestion-directed greedy
-both proved neutral-to-negative in paired tests. Closing it needs a detailed placer that makes coordinated,
-multi-cell moves. A useful next measurement is the hard-macro-only score, which would isolate how much of the
-gain is hard-macro placement versus soft-cell clustering.</p>
 
 </body>
 </html>

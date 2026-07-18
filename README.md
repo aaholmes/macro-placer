@@ -4,7 +4,7 @@
 
 This is a solver for the [Partcl/HRT Macro Placement Challenge](https://github.com/partcleda/macro-place-challenge-2026) — which ranks placers on 17 IBM/ICCAD04 benchmarks by a single cost (wirelength + density + congestion) with zero macro overlap — plus the experiments and findings that shaped it. A **differentiable global placer** (any smooth loss) produces a good layout from a random start, a legalizer removes all overlap, and **greedy detailed placement** polishes against the exact metric. Built on a from-scratch evaluator that is **exact to the reference metric but ~50–3600× faster**, which turns the search into something you can actually iterate on.
 
-**Result: average score 1.0155 across all 17 IBM benchmarks (zero overlaps) — 31% below the reference placement, and a new personal best.** Full write-up with plots: [`notes/solution.html`](notes/solution.html).
+**Result: from random starting placements, average score 1.0155 across all 17 IBM benchmarks (zero overlaps) — 31% below the reference placement each benchmark provides (a RePlAce-quality baseline; RePlAce itself scores 1.458).** Full write-up with plots: [`notes/solution.html`](notes/solution.html).
 
 ---
 

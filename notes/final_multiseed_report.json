@@ -1,0 +1,166 @@
+{
+  "configs": [
+    221,
+    97,
+    95
+  ],
+  "seeds": 8,
+  "avg": 1.0663020996486439,
+  "avg_diffonly": 1.0814951553064234,
+  "prior": 1.0376,
+  "rows": [
+    {
+      "benchmark": "ibm01",
+      "diff_best": 0.8198153972625732,
+      "best_config": 221,
+      "best_seed": 1,
+      "greedy_ref": 0.7944295406341553,
+      "final": 0.7944295406341553,
+      "n_cells": 7
+    },
+    {
+      "benchmark": "ibm02",
+      "diff_best": 1.0150249004364014,
+      "best_config": 97,
+      "best_seed": 1,
+      "greedy_ref": 1.130113959312439,
+      "final": 1.0150249004364014,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm03",
+      "diff_best": 0.978685736656189,
+      "best_config": 95,
+      "best_seed": 1,
+      "greedy_ref": 0.9871551990509033,
+      "final": 0.978685736656189,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm04",
+      "diff_best": 0.953039288520813,
+      "best_config": 97,
+      "best_seed": 1,
+      "greedy_ref": 0.9820522665977478,
+      "final": 0.953039288520813,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm06",
+      "diff_best": 1.1565513610839844,
+      "best_config": 95,
+      "best_seed": 0,
+      "greedy_ref": 1.141674280166626,
+      "final": 1.141674280166626,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm07",
+      "diff_best": 1.0796501636505127,
+      "best_config": 221,
+      "best_seed": 0,
+      "greedy_ref": 1.0972775220870972,
+      "final": 1.0796501636505127,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm08",
+      "diff_best": 1.3350563049316406,
+      "best_config": 95,
+      "best_seed": 0,
+      "greedy_ref": 1.3031021356582642,
+      "final": 1.3031021356582642,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm09",
+      "diff_best": 0.8357465267181396,
+      "best_config": 95,
+      "best_seed": 0,
+      "greedy_ref": 0.849615216255188,
+      "final": 0.8357465267181396,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm10",
+      "diff_best": 1.0688226222991943,
+      "best_config": 97,
+      "best_seed": 1,
+      "greedy_ref": 1.055861234664917,
+      "final": 1.055861234664917,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm11",
+      "diff_best": 0.8867431879043579,
+      "best_config": 97,
+      "best_seed": 0,
+      "greedy_ref": 0.9056394696235657,
+      "final": 0.8867431879043579,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm12",
+      "diff_best": 1.2168567180633545,
+      "best_config": 221,
+      "best_seed": 0,
+      "greedy_ref": 1.2013330459594727,
+      "final": 1.2013330459594727,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm13",
+      "diff_best": 0.9563204646110535,
+      "best_config": 97,
+      "best_seed": 1,
+      "greedy_ref": 0.9821988940238953,
+      "final": 0.9563204646110535,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm14",
+      "diff_best": 1.1582732200622559,
+      "best_config": 221,
+      "best_seed": 0,
+      "greedy_ref": 1.1523553133010864,
+      "final": 1.1523553133010864,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm15",
+      "diff_best": 1.2254197597503662,
+      "best_config": 221,
+      "best_seed": 1,
+      "greedy_ref": 1.1544523239135742,
+      "final": 1.1544523239135742,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm16",
+      "diff_best": 1.1272228956222534,
+      "best_config": 221,
+      "best_seed": 0,
+      "greedy_ref": 1.1021729707717896,
+      "final": 1.1021729707717896,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm17",
+      "diff_best": 1.329351544380188,
+      "best_config": 221,
+      "best_seed": 0,
+      "greedy_ref": 1.2737070322036743,
+      "final": 1.2737070322036743,
+      "n_cells": 6
+    },
+    {
+      "benchmark": "ibm18",
+      "diff_best": 1.2428375482559204,
+      "best_config": 97,
+      "best_seed": 0,
+      "greedy_ref": 1.2942856550216675,
+      "final": 1.2428375482559204,
+      "n_cells": 6
+    }
+  ]
+}

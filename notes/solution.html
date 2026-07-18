@@ -12,10 +12,8 @@
   h3{font-size:1.05rem;margin:1.1rem 0 .3rem}
   .sub{color:#64748b;margin:.1rem 0 1rem}
   code{background:#f1f5f9;padding:.05rem .3rem;border-radius:3px;font-size:.88em}
-  table{border-collapse:collapse;width:100%;font-size:.92rem;margin:.6rem 0}
-  th,td{border:1px solid #e2e8f0;padding:.22rem .45rem;text-align:right}
-  th:first-child,td:first-child{text-align:left}
-  .cfg td{text-align:left}
+  table{border-collapse:collapse;width:auto;max-width:100%;font-size:.92rem;margin:.6rem 0}
+  th,td{border:1px solid #e2e8f0;padding:.22rem .7rem;text-align:left}
   thead th{background:#f8fafc}
   .win{color:#16a34a;font-weight:600}
   .lose{color:#b91c1c;font-weight:600}
@@ -30,13 +28,21 @@
 <body>
 
 <h1>Macro Placement on the IBM/ICCAD04 Benchmarks</h1>
-<p class="sub">A differentiable global placer + greedy detailed placement, tuned by Bayesian search.
-Score = 1.0·wirelength + 0.5·density + 0.5·congestion (lower is better; zero macro overlap required).</p>
+<p>A chip is millions of tiny logic cells plus a few hundred big fixed blocks — memories and other big
+prebuilt components. <i>Macro placement</i> is deciding where those big blocks go, and it largely sets how good the finished chip
+is. This is my solver for a benchmark challenge that grades each placement with a single number — mostly
+wirelength, plus density and routing congestion, lower is better, with no blocks allowed to overlap. The
+animations below show it running on four chips (watch the score dive); the rest of the page is how it does
+that and what I learned.</p>
 
-<p><b>What this is.</b> Macro placement positions the large fixed blocks — memories, IP cores — on a chip
-before the millions of standard cells fill in around them. Those blocks dominate wirelength and congestion,
-so it's one of the highest-leverage steps in physical design. This challenge scores a placer on 17
-IBM/ICCAD04 benchmarks by the cost above, at zero macro overlap. Below is my solver and what I learned.</p>
+<p>Each one replays a real run, three panels: the <b>reference</b> placement it's compared against; my placer
+working (random spread → clustered, then cleaned up so nothing overlaps); and the <b>score</b> at each frame
+(lower is better, dashed line = the reference), diving below the reference. Big blocks are rectangles (color =
+size), the cell clusters are dots. Every time, the reference wastes canvas and mine packs it tight.</p>
+<img class="wide" src="opt_ibm01.gif" alt="ibm01: reference | optimization | score curve">
+<img class="wide" src="opt_ibm09.gif" alt="ibm09: reference | optimization | score curve">
+<img class="wide" src="opt_ibm17.gif" alt="ibm17: reference | optimization | score curve">
+<img class="wide" src="opt_ibm18.gif" alt="ibm18: reference | optimization | score curve">
 
 <p><b>Result.</b> From <i>random</i> starting placements, my pipeline averages <b>1.0155</b> over all 17 —
 <b>31% below</b> the reference placement provided with each benchmark (avg 1.477, a RePlAce-quality baseline;
@@ -51,20 +57,11 @@ across sessions instead). <b>Scope:</b> the score is soft-macro-dominated — co
 standard-cell clusters drives ~98% of the gain, hard-macro moves ~0.2% — so it measures soft-cell placement
 more than hard-macro placement.</p>
 
-<p>The four animations below replay actual winning runs, three panels each: the <b>reference</b> placement;
-my <b>global stage</b> animating random spread → clustered (then legalized and greedy-polished); and the
-<b>score</b> per frame (log axis, dashed line = reference) diving below the reference. Hard macros are
-rectangles (color = area), soft clusters are dots. Small to large — <b>ibm01</b> 0.784, <b>ibm09</b> 0.797,
-<b>ibm17</b> 1.205, <b>ibm18</b> 1.185 — in each, the reference wastes canvas and mine packs it.</p>
-<img class="wide" src="opt_ibm01.gif" alt="ibm01: reference | optimization | score curve">
-<img class="wide" src="opt_ibm09.gif" alt="ibm09: reference | optimization | score curve">
-<img class="wide" src="opt_ibm17.gif" alt="ibm17: reference | optimization | score curve">
-<img class="wide" src="opt_ibm18.gif" alt="ibm18: reference | optimization | score curve">
-
 <img class="fig" src="fig_perbench.png" alt="per-benchmark comparison">
 
 <h2>How it works</h2>
-<p>Three stages: a continuous gradient-based global placer, a legalizer, then a discrete search on the true
+<p>The exact score is <b>1.0·wirelength + 0.5·density + 0.5·congestion</b> (lower is better, zero overlaps).
+Three stages: a continuous gradient-based global placer, a legalizer, then a discrete search on the true
 score.</p>
 
 <h3>1 · Differentiable global placement</h3>

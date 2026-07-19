@@ -21,6 +21,7 @@ from macro_place.objective import compute_proxy_cost
 from placers.fast_eval import FastEval
 from placers.legalizer import legalize
 from placers.analytical import DifferentiablePlacer, proxy_loss
+from placers.jumps import place_with_jumps, build_net_members
 
 CHAL = "/home/laz/partcl/macro-place-challenge-2026"
 ROOT = "/home/laz/partcl/my-macro-placer"
@@ -57,6 +58,8 @@ ap.add_argument("--configs", default="",
                      "the multistart winner trial 221 -> the 1.0455 regression)")
 ap.add_argument("--deadline-min", type=float, required=True)
 ap.add_argument("--benches", default=",".join(ALL))
+ap.add_argument("--jumps", action="store_true",
+                help="emit net-collapse jump candidates (an extra candidate source; best-of-N gates them per design)")
 a = ap.parse_args()
 os.makedirs(OUT, exist_ok=True)
 
@@ -85,6 +88,7 @@ print(f"=== stage A: iters={a.iters or 'per-config'} topk={a.topk} "
 for nm in benches:
     b, plc = load_benchmark_from_dir(f"{CHAL}/external/MacroPlacement/Testcases/ICCAD04/{nm}")
     fe = FastEval(b, plc); P = DifferentiablePlacer(fe); sz = b.macro_sizes.numpy()
+    netmem = build_net_members(P) if a.jumps else None
     mj = f"{OUT}/{nm}_meta.json"
     meta = json.load(open(mj)) if os.path.exists(mj) else []
     cnt = len(meta)
@@ -93,14 +97,17 @@ for nm in benches:
         ci = cnt % len(configs); seed = cnt // len(configs)
         trial, hp, loss = configs[ci]
         it = a.iters if a.iters else hp["iters"]
-        raw = P.place(loss, pos0=None, iters=it, lr=hp["lr"], seed=seed * 101 + ci, logf=None)
+        if a.jumps:
+            raw = place_with_jumps(P, loss, it, hp["lr"], seed * 101 + ci, jump={}, net_members=netmem)
+        else:
+            raw = P.place(loss, pos0=None, iters=it, lr=hp["lr"], seed=seed * 101 + ci, logf=None)
         if hp["lsteps"]:
             raw[:, :2] = P.legalize_soft(torch.tensor(raw[:, :2], dtype=torch.float32, device=P.dev),
                                          steps=hp["lsteps"]).detach().cpu().numpy()
         lg, _, _ = legalize(raw, sz, b.num_hard_macros, b.canvas_width, b.canvas_height, gap=0.01)
         np.savez(f"{OUT}/{nm}_p{cnt}.npz", placement=lg)
         pd = float(compute_proxy_cost(torch.tensor(lg, dtype=torch.float32), b, plc)["proxy_cost"])
-        meta.append({"idx": cnt, "trial": trial, "config_i": ci, "seed": seed, "diff": pd})
+        meta.append({"idx": cnt, "trial": trial, "config_i": ci, "seed": seed, "diff": pd, "jumps": bool(a.jumps)})
         json.dump(meta, open(mj, "w"))
         cnt += 1
     print(f"[{time.strftime('%H:%M:%S')}] {nm}: {cnt} candidates placed "

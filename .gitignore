@@ -17,3 +17,7 @@ notes/polish/
 notes/cong_exp/
 notes/final_multiseed/
 notes/opt_ibm06_*.gif
+
+# jump-experiment checkpoints (intermediate)
+notes/jump_ck/
+notes/jump_sweep_ck/

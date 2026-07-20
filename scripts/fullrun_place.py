@@ -38,7 +38,8 @@ def hp_from_params(p):
     return dict(dmode=dmode, lam_d_end=lam_d_end, lam_c0=lam_c0, lam_c1=lam_c1,
                 lam_d_ratio=p["lam_d_ratio"], gamma=p["gamma"], tau_d=p["tau_d"],
                 tau_c=p["tau_c"], lam_wl0=p["lam_wl0"], target=p["target"], lr=p["lr"],
-                ramp_p=p["ramp_p"], lsteps=p["lsteps_n"], iters=p["iters"])
+                ramp_p=p["ramp_p"], lsteps=p["lsteps_n"], iters=p["iters"],
+                ov_hold=p.get("ov_hold", 0.0), ov_ramp=p.get("ov_ramp", 0.0))
 
 
 def build_loss(hp):
@@ -46,7 +47,7 @@ def build_loss(hp):
                       lam_d1=hp["lam_d_end"], lam_c0=hp["lam_c0"], lam_c1=hp["lam_c1"],
                       tau_d=hp["tau_d"], tau_c=hp["tau_c"], target=hp["target"], topk="lapsum",
                       dmode=hp["dmode"], lam_wl0=hp["lam_wl0"], lam_wl1=1.0, ramp_p=hp["ramp_p"],
-                      legalize_steps=hp["lsteps"])
+                      legalize_steps=hp["lsteps"], ov_hold=hp["ov_hold"], ov_ramp=hp["ov_ramp"])
 
 
 ap = argparse.ArgumentParser()
@@ -60,30 +61,48 @@ ap.add_argument("--deadline-min", type=float, required=True)
 ap.add_argument("--benches", default=",".join(ALL))
 ap.add_argument("--jumps", action="store_true",
                 help="emit net-collapse jump candidates (an extra candidate source; best-of-N gates them per design)")
+ap.add_argument("--window-config", default="",
+                help="path to a window study winner json (e.g. notes/bayes_window_final.json); runs it "
+                     "as the sole config across all benches (gate run for the overlap-ramp). Its params "
+                     "override 221's structural defaults (dmode/use_cong/lsteps/iters/tau_c).")
 a = ap.parse_args()
 os.makedirs(OUT, exist_ok=True)
 
 study = optuna.load_study(study_name="diffplace",
                           storage="sqlite:////home/laz/partcl/my-macro-placer/notes/bayes.db")
-# Config selection: finalize-verified configs by DEFAULT (best-of-16 multistart ranking),
-# not top-k by raw search value. Search-value top-k excludes trial 221/222 (the actual
-# multistart winners) and caused the earlier 1.0455 vs 1.0376 regression.
-FINALIZE = [221, 97, 95, 222, 87]
-byn = {t.number: t for t in study.trials}
-if a.configs:
-    ids = [int(x) for x in a.configs.split(",")]
-elif FINALIZE and all(n in byn for n in FINALIZE):
-    ids = FINALIZE[:a.topk]
+if a.window_config:
+    # gate run: single windowed config = window winner params merged onto 221's structural
+    # defaults (supplies dmode=overflow, use_cong=0, lsteps_n=0, iters, tau_c that the window
+    # study left fixed and did not store). Best-of-N over seeds still gates per benchmark.
+    P0 = json.load(open(f"{ROOT}/notes/bayes_final.json"))["params"]
+    wp = json.load(open(a.window_config))["params"]
+    full = {**P0, **wp}
+    hp = hp_from_params(full)
+    configs = [(-1, hp, build_loss(hp))]
+    top = []
+    print(f"=== window gate run: hold={hp['ov_hold']:.3f} ramp={hp['ov_ramp']:.3f} "
+          f"lam_wl0={hp['lam_wl0']:.3f} iters={a.iters or hp['iters']} ===", flush=True)
 else:
-    ids = [t.number for t in sorted([t for t in study.trials if t.value is not None],
-                                    key=lambda t: t.value)[:a.topk]]
-top = [byn[n] for n in ids]
-configs = [(t.number, hp_from_params(t.params), build_loss(hp_from_params(t.params))) for t in top]
+    # Config selection: finalize-verified configs by DEFAULT (best-of-16 multistart ranking),
+    # not top-k by raw search value. Search-value top-k excludes trial 221/222 (the actual
+    # multistart winners) and caused the earlier 1.0455 vs 1.0376 regression.
+    FINALIZE = [221, 97, 95, 222, 87]
+    byn = {t.number: t for t in study.trials}
+    if a.configs:
+        ids = [int(x) for x in a.configs.split(",")]
+    elif FINALIZE and all(n in byn for n in FINALIZE):
+        ids = FINALIZE[:a.topk]
+    else:
+        ids = [t.number for t in sorted([t for t in study.trials if t.value is not None],
+                                        key=lambda t: t.value)[:a.topk]]
+    top = [byn[n] for n in ids]
+    configs = [(t.number, hp_from_params(t.params), build_loss(hp_from_params(t.params))) for t in top]
 benches = a.benches.split(",")
 per_bench = a.deadline_min * 60 / len(benches)
-print(f"=== stage A: iters={a.iters or 'per-config'} topk={a.topk} "
-      f"(trials {[t.number for t in top]}, their iters {[c[1]['iters'] for c in configs]}) "
-      f"per-bench {per_bench/60:.0f}min ===", flush=True)
+if top:
+    print(f"=== stage A: iters={a.iters or 'per-config'} topk={a.topk} "
+          f"(trials {[t.number for t in top]}, their iters {[c[1]['iters'] for c in configs]}) "
+          f"per-bench {per_bench/60:.0f}min ===", flush=True)
 
 for nm in benches:
     b, plc = load_benchmark_from_dir(f"{CHAL}/external/MacroPlacement/Testcases/ICCAD04/{nm}")

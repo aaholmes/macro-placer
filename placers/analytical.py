@@ -209,6 +209,26 @@ class DifferentiablePlacer:
         over = torch.clamp(self.density_field(coord) - target, min=0.0)
         return lapsum_topk_mean(over, 0.10, tau) if topk == "lapsum" else softtopk(over, tau)
 
+    def density_windowed(self, coord, t, tau=0.05, target=None, ov_hold=0.0, ov_ramp=0.0):
+        """Overflow density with a time-windowed deep-overlap penalty (the tuned
+        'overlap ramp'): always penalize crowding up to one cap layer; hold the
+        deeper >cap penalty at 0 for t<=ov_hold, then ramp to full over ov_ramp so
+        macros may stack and pass through each other early to re-sort ordering.
+        w=1 (ov_hold=ov_ramp=0, or t past the ramp) => identical to density(overflow,
+        lapsum) with the same target. cap=1.0 (>=target) is the single-layer level."""
+        target = self.util if target is None else target
+        cap = 1.0
+        rho = self.density_field(coord)
+        spread = torch.clamp(torch.clamp(rho, max=cap) - target, min=0.0)
+        overlap = torch.clamp(rho - cap, min=0.0)
+        if t <= ov_hold:
+            w = 0.0
+        elif ov_ramp <= 1e-9:
+            w = 1.0
+        else:
+            w = min(1.0, (t - ov_hold) / ov_ramp)
+        return lapsum_topk_mean(spread + w * overlap, 0.10, tau)
+
     def congestion(self, coord, tau=0.02, topk="softmax"):
         R = self.rudy_field(coord)
         return lapsum_topk_mean(R, 0.05, tau) if topk == "lapsum" else softtopk(R, tau)
@@ -330,7 +350,7 @@ def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
                lam_c0=None, lam_c1=None, lam_ov0=0.0, lam_ov1=0.0,
                tau_d=0.05, tau_c=0.02, target=0.8, topk="softmax",
                legalize_steps=0, lam_disp=0.0, lam_wl0=1.0, lam_wl1=1.0,
-               dmode="overflow", ramp_p=1.0):
+               dmode="overflow", ramp_p=1.0, ov_hold=0.0, ov_ramp=0.0):
     """Default objective = challenge proxy, with annealing over t (all schedules
     warped by t -> t**ramp_p, so ramp_p>1 delays ramps to late in the run):
       gamma (WL smoothing) large->small, lam_d (density) low->high,
@@ -347,7 +367,12 @@ def proxy_loss(gamma_hi_mult=10.0, lam_d0=0.0025, lam_d1=0.05, lam_c=0.0,
         lam_d = anneal(te, lam_d0, lam_d1)
         lam_wl = anneal(te, max(lam_wl0, 1e-9), max(lam_wl1, 1e-9), geometric=True)
         wl = P.wirelength(c, gamma)
-        de = P.density(c, tau=tau_d, target=target, topk=topk, mode=dmode)
+        # window (overlap-ramp) applies to the overflow/lapsum density only; default
+        # (ov_hold=ov_ramp=0) keeps the original call -> bit-identical to before.
+        if (ov_hold or ov_ramp) and dmode == "overflow":
+            de = P.density_windowed(c, t, tau=tau_d, target=target, ov_hold=ov_hold, ov_ramp=ov_ramp)
+        else:
+            de = P.density(c, tau=tau_d, target=target, topk=topk, mode=dmode)
         L = lam_wl * wl + lam_d * de
         if lc0 or lc1:
             lam_c_t = lc0 + (lc1 - lc0) * te       # linear -> allows 0 start

@@ -9,6 +9,7 @@ notes/*.stdout
 notes/*.log
 notes/*.npy
 notes/bayes.db
+notes/bayes_window.db
 notes/bayes_best.json
 # intermediate per-candidate artifacts (final reports kept at notes/ top level)
 notes/fullrun/
@@ -21,3 +22,9 @@ notes/opt_ibm06_*.gif
 # jump-experiment checkpoints (intermediate)
 notes/jump_ck/
 notes/jump_sweep_ck/
+
+# density-experiment checkpoints (intermediate)
+notes/split_ck/
+notes/radius_ck/
+notes/softcore_ck/
+notes/pairwise_ck/

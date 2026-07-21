@@ -10,9 +10,13 @@ notes/*.log
 notes/*.npy
 notes/bayes.db
 notes/bayes_window.db
+notes/bayes_wg.db
 notes/bayes_best.json
 # intermediate per-candidate artifacts (final reports kept at notes/ top level)
 notes/fullrun/
+notes/gate_window/
+notes/gate_221/
+notes/fullrun_pool6/
 notes/validation/
 notes/polish/
 notes/cong_exp/
@@ -28,3 +32,4 @@ notes/split_ck/
 notes/radius_ck/
 notes/softcore_ck/
 notes/pairwise_ck/
+notes/fullrun_pool5swap/

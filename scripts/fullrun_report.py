@@ -10,7 +10,7 @@ sys.path.insert(0, "/home/laz/partcl/my-macro-placer")
 import numpy as np
 
 ROOT = "/home/laz/partcl/my-macro-placer"
-OUT = f"{ROOT}/notes/fullrun"
+OUT = os.environ.get("FULLRUN_DIR", f"{ROOT}/notes/fullrun")
 ALL = [f"ibm{n:02d}" for n in [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]]
 PRIOR = 1.0376
 LB1 = 0.9507
@@ -68,7 +68,7 @@ if rows:
         print(f"  NOTE: {n}/17 benchmarks present (partial).")
     json.dump({"rows": rows, "pb_avg": pb_avg, "after_avg": aft, "before_avg": bef,
                "n": n, "prior": PRIOR, "lb1": LB1},
-              open(f"{ROOT}/notes/fullrun_report.json", "w"), indent=2)
-    print("\nsaved notes/fullrun_report.json")
+              open(f"{OUT}_report.json", "w"), indent=2)
+    print(f"\nsaved {OUT}_report.json")
 else:
     print("no results yet")

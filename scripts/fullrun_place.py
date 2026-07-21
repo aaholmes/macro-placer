@@ -25,7 +25,7 @@ from placers.jumps import place_with_jumps, build_net_members
 
 CHAL = "/home/laz/partcl/macro-place-challenge-2026"
 ROOT = "/home/laz/partcl/my-macro-placer"
-OUT = f"{ROOT}/notes/fullrun"
+OUT = os.environ.get("FULLRUN_DIR", f"{ROOT}/notes/fullrun")
 ALL = [f"ibm{n:02d}" for n in [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]]
 
 
@@ -62,25 +62,29 @@ ap.add_argument("--benches", default=",".join(ALL))
 ap.add_argument("--jumps", action="store_true",
                 help="emit net-collapse jump candidates (an extra candidate source; best-of-N gates them per design)")
 ap.add_argument("--window-config", default="",
-                help="path to a window study winner json (e.g. notes/bayes_window_final.json); runs it "
-                     "as the sole config across all benches (gate run for the overlap-ramp). Its params "
-                     "override 221's structural defaults (dmode/use_cong/lsteps/iters/tau_c).")
+                help="path to a window study winner json (e.g. notes/bayes_window_final.json); APPENDS "
+                     "it to the config pool (its params override 221's structural defaults). With "
+                     "--window-only it is used as the sole config instead (gate control).")
+ap.add_argument("--window-only", action="store_true",
+                help="use ONLY the window config (requires --window-config); the paired-gate control arm")
 a = ap.parse_args()
 os.makedirs(OUT, exist_ok=True)
 
+
+def window_cfg():
+    # window winner params merged onto 221's structural defaults (dmode=overflow, use_cong=0,
+    # lsteps_n=0, iters, tau_c that the window study left fixed and did not store).
+    P0 = json.load(open(f"{ROOT}/notes/bayes_final.json"))["params"]
+    hp = hp_from_params({**P0, **json.load(open(a.window_config))["params"]})
+    return (-1, hp, build_loss(hp)), hp
+
+
 study = optuna.load_study(study_name="diffplace",
                           storage="sqlite:////home/laz/partcl/my-macro-placer/notes/bayes.db")
-if a.window_config:
-    # gate run: single windowed config = window winner params merged onto 221's structural
-    # defaults (supplies dmode=overflow, use_cong=0, lsteps_n=0, iters, tau_c that the window
-    # study left fixed and did not store). Best-of-N over seeds still gates per benchmark.
-    P0 = json.load(open(f"{ROOT}/notes/bayes_final.json"))["params"]
-    wp = json.load(open(a.window_config))["params"]
-    full = {**P0, **wp}
-    hp = hp_from_params(full)
-    configs = [(-1, hp, build_loss(hp))]
-    top = []
-    print(f"=== window gate run: hold={hp['ov_hold']:.3f} ramp={hp['ov_ramp']:.3f} "
+if a.window_only:
+    cfg, hp = window_cfg()
+    configs = [cfg]; top = []
+    print(f"=== window-only gate control: hold={hp['ov_hold']:.3f} ramp={hp['ov_ramp']:.3f} "
           f"lam_wl0={hp['lam_wl0']:.3f} iters={a.iters or hp['iters']} ===", flush=True)
 else:
     # Config selection: finalize-verified configs by DEFAULT (best-of-16 multistart ranking),
@@ -97,6 +101,11 @@ else:
                                         key=lambda t: t.value)[:a.topk]]
     top = [byn[n] for n in ids]
     configs = [(t.number, hp_from_params(t.params), build_loss(hp_from_params(t.params))) for t in top]
+    if a.window_config:                                  # append the window config to the pool
+        cfg, hp = window_cfg()
+        configs.append(cfg)
+        print(f"=== + window config appended: hold={hp['ov_hold']:.3f} ramp={hp['ov_ramp']:.3f} "
+              f"lam_wl0={hp['lam_wl0']:.3f} -> {len(configs)}-config pool ===", flush=True)
 benches = a.benches.split(",")
 per_bench = a.deadline_min * 60 / len(benches)
 if top:

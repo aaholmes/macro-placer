@@ -22,7 +22,7 @@ from placers.local_search import optimize_fast
 
 CHAL = "/home/laz/partcl/macro-place-challenge-2026"
 ROOT = "/home/laz/partcl/my-macro-placer"
-OUT = f"{ROOT}/notes/fullrun"
+OUT = os.environ.get("FULLRUN_DIR", f"{ROOT}/notes/fullrun")
 
 
 def run_one(args):

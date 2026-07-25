@@ -260,6 +260,11 @@ deployment metric (best-of-<i>N</i> after greedy), each tested paired against th
 <p>All four reduce the run-to-run variance best-of-<i>N</i> feeds on (the variance test above). The one kept —
 window + swaps — rides in the pool as a <i>high-variance</i> config that wins some designs at large <i>N</i>,
 not because per-run reordering helps.</p>
+<img class="fig" src="bayes_swap_trials.png" alt="deployment-metric search trajectory">
+<p class="note">These searches tune on the <b>deployment metric</b> — best-of-3 seeds after a short greedy
+polish, not single-seed — so each config is scored the way it's actually used. The winner (window + swaps)
+edges the no-mechanism baseline in this objective, but the variance test above is why that edge doesn't carry
+to best-of-<i>N</i> on all 17.</p>
 
 <h3>Other</h3>
 <ul>

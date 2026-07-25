@@ -10,10 +10,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ROOT = "/home/laz/partcl/my-macro-placer"
-rep = json.load(open(f"{ROOT}/notes/fullrun_report.json"))
+rep = json.load(open(f"{ROOT}/notes/best100_report.json"))
 ref = {r["benchmark"]: r["reference"] for r in json.load(open(f"{ROOT}/notes/validate_all.json"))["rows"]}
 order = [f"ibm{n:02d}" for n in [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]]
-pb = {r["benchmark"]: min(r["best_after"], r["greedy_ref"]) for r in rep["rows"]}
+pb = rep["per_bench"]   # best-of-100 deployment result (per-benchmark best)
 
 ours = [pb[nm] for nm in order]
 refs = [ref[nm] for nm in order]

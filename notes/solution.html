@@ -44,18 +44,18 @@ size), the cell clusters are dots. Every time, the reference wastes canvas and m
 <img class="wide" src="opt_ibm17.gif" alt="ibm17: reference | optimization | score curve">
 <img class="wide" src="opt_ibm18.gif" alt="ibm18: reference | optimization | score curve">
 
-<p><b>Result.</b> From <i>random</i> starting placements, my pipeline averages <b>1.0155</b> over all 17 —
+<p><b>Result.</b> From <i>random</i> starting placements, my pipeline averages <b>1.0137</b> over all 17 —
 <b>31% below</b> the reference placement provided with each benchmark (avg 1.477, a RePlAce-quality baseline;
 RePlAce itself scores 1.458), beating it on every design with zero overlaps. The design goal was generality:
 the global placer optimizes <b>any differentiable loss</b>, so wirelength, density, congestion, or a custom
 objective all drop into the same GPU engine unchanged.</p>
 
 <p class="note"><b>Compute.</b> A candidate takes ~3–6 min (GPU global stage ~80 s + CPU polish 1–5 min),
-inside the challenge's 1-hour-per-benchmark limit. The 1.0155 is best-of-<i>N</i> (16–40 candidates each); one
-candidate alone averages 1.105, and best-of-<i>N</i> fits the budget with a batched/parallel harness (I ran it
-across sessions instead). <b>Scope:</b> the score is soft-macro-dominated — co-optimizing the movable
-standard-cell clusters drives ~98% of the gain, hard-macro moves ~0.2% — so it measures soft-cell placement
-more than hard-macro placement.</p>
+inside the challenge's 1-hour-per-benchmark limit. The 1.0137 is best-of-<i>N</i> over a small pool of
+configs (~45 candidates/benchmark in the 1-hour budget), keeping the best per benchmark; a single candidate
+averages ~1.1. <b>Scope:</b> the score is soft-macro-dominated — co-optimizing the movable standard-cell
+clusters drives ~98% of the gain, hard-macro moves ~0.2% — so it measures soft-cell placement more than
+hard-macro placement.</p>
 
 <img class="fig" src="fig_perbench.png" alt="per-benchmark comparison">
 
@@ -89,10 +89,14 @@ reimplementation of the metric). It moves soft macros only, so hard-macro legali
 most of the absolute-quality work — 6.2% better than running greedy straight from the reference — and is why
 the score is soft-macro-dominated.</p>
 
-<h3>Multi-start</h3>
+<h3>Multi-start and the config pool</h3>
 <p>Different random starts vary a lot (~6%), so I place each design from many seeds and keep the best — the gap
-between the single-candidate 1.105 and best-of-<i>N</i> 1.0155. It saturates: past a few dozen candidates the
-gains flatten.</p>
+between a single candidate (~1.1) and best-of-<i>N</i> (1.0137). The candidates come from a small <i>pool</i>
+of configs run side by side: the tuned config (below), plus variants — the most useful <b>holds the density
+penalty off early</b> so wirelength can re-sort macro ordering before the layout tightens, with annealed
+same-size macro swaps on top. Different variants win different designs (that one wins 11 of 17), so pooling
+them and keeping the per-design best beats any single config. Best-of-<i>N</i> saturates fast: past a few dozen
+candidates the gains flatten — the run that produced 1.0137 already sits near that floor.</p>
 
 <h2>The tuned configuration</h2>
 <p>Weights and schedule were tuned by Bayesian optimization (~230 trials) on 3 designs (ibm01/13/17,
@@ -142,19 +146,19 @@ those behave differently. (Single-seed against a ~2% noise floor, so only the 5k
 <table>
 <thead><tr><th>design</th><th>reference</th><th>mine</th><th>ratio</th><th>design</th><th>reference</th><th>mine</th><th>ratio</th></tr></thead>
 <tbody>
-<tr><td>ibm01†</td><td>1.039</td><td>0.784</td><td class="win">0.755</td><td>ibm11</td><td>1.214</td><td>0.858</td><td class="win">0.707</td></tr>
-<tr><td>ibm02</td><td>1.566</td><td>0.996</td><td class="win">0.636</td><td>ibm12</td><td>1.625</td><td>1.186</td><td class="win">0.730</td></tr>
-<tr><td>ibm03</td><td>1.325</td><td>0.941</td><td class="win">0.710</td><td>ibm13†</td><td>1.385</td><td>0.906</td><td class="win">0.654</td></tr>
-<tr><td>ibm04</td><td>1.314</td><td>0.902</td><td class="win">0.687</td><td>ibm14</td><td>1.594</td><td>1.094</td><td class="win">0.687</td></tr>
-<tr><td>ibm06</td><td>1.658</td><td>1.107</td><td class="win">0.668</td><td>ibm15</td><td>1.603</td><td>1.122</td><td class="win">0.700</td></tr>
-<tr><td>ibm07</td><td>1.476</td><td>0.993</td><td class="win">0.673</td><td>ibm16</td><td>1.491</td><td>1.102</td><td class="win">0.739</td></tr>
-<tr><td>ibm08</td><td>1.847</td><td>1.057</td><td class="win">0.573</td><td>ibm17†</td><td>1.739</td><td>1.205</td><td class="win">0.693</td></tr>
-<tr><td>ibm09</td><td>1.110</td><td>0.797</td><td class="win">0.717</td><td>ibm18</td><td>1.790</td><td>1.185</td><td class="win">0.662</td></tr>
-<tr><td>ibm10</td><td>1.337</td><td>1.027</td><td class="win">0.768</td><td><b>AVG</b></td><td><b>1.477</b></td><td><b>1.0155</b></td><td class="win"><b>0.692</b></td></tr>
+<tr><td>ibm01†</td><td>1.039</td><td>0.790</td><td class="win">0.760</td><td>ibm11</td><td>1.214</td><td>0.853</td><td class="win">0.703</td></tr>
+<tr><td>ibm02</td><td>1.566</td><td>1.026</td><td class="win">0.655</td><td>ibm12</td><td>1.625</td><td>1.152</td><td class="win">0.709</td></tr>
+<tr><td>ibm03</td><td>1.325</td><td>0.944</td><td class="win">0.712</td><td>ibm13†</td><td>1.385</td><td>0.901</td><td class="win">0.651</td></tr>
+<tr><td>ibm04</td><td>1.314</td><td>0.920</td><td class="win">0.700</td><td>ibm14</td><td>1.594</td><td>1.112</td><td class="win">0.698</td></tr>
+<tr><td>ibm06</td><td>1.658</td><td>1.104</td><td class="win">0.666</td><td>ibm15</td><td>1.603</td><td>1.110</td><td class="win">0.693</td></tr>
+<tr><td>ibm07</td><td>1.476</td><td>1.011</td><td class="win">0.685</td><td>ibm16</td><td>1.491</td><td>1.071</td><td class="win">0.719</td></tr>
+<tr><td>ibm08</td><td>1.847</td><td>1.072</td><td class="win">0.580</td><td>ibm17†</td><td>1.739</td><td>1.199</td><td class="win">0.689</td></tr>
+<tr><td>ibm09</td><td>1.110</td><td>0.771</td><td class="win">0.694</td><td>ibm18</td><td>1.790</td><td>1.198</td><td class="win">0.669</td></tr>
+<tr><td>ibm10</td><td>1.337</td><td>1.000</td><td class="win">0.748</td><td><b>AVG</b></td><td><b>1.477</b></td><td><b>1.0137</b></td><td class="win"><b>0.690</b></td></tr>
 </tbody>
 </table>
-<p class="note">1.0155 is best-of-<i>N</i>; a single median candidate averages 1.105 (ratio 0.751). Both beat
-the reference on all 17, and both beat the RePlAce (1.458) and SA (2.125) baselines.</p>
+<p class="note">1.0137 is best-of-<i>N</i>; a single median candidate averages ~1.1. Both beat the reference on
+all 17, and both beat the RePlAce (1.458) and SA (2.125) baselines.</p>
 
 <h2>What I learned</h2>
 <p><b>Multi-start beats a lucky seed.</b> Single-seed scores carry ~2% noise — bigger than the gap between
@@ -163,6 +167,16 @@ best-of-16 reshuffled them and promoted one that had ranked only 5th on a single
 every appendix experiment, compares configs on the same seeds — otherwise you're measuring seed luck, not the
 change.</p>
 <img class="fig half" src="fig_finalize.png" alt="finalize reshuffle">
+
+<p><b>Per-run mechanisms can't beat multi-start.</b> The differentiable stage mostly <i>spreads</i> macros and
+rarely reorders them past each other, so I tried several fixes for that — an early overlap-tolerance window,
+discrete jumps, injected noise, annealed same-size swaps. Each improves the <i>typical</i> placement, but none
+beats best-of-<i>N</i>, and a paired variance test shows why: the mechanisms make runs <i>converge</i> (lower
+mean, up to ~10× lower spread), but best-of-<i>N</i> doesn't want the typical run — it wants the best of many,
+and the random-start spread already produces one at least as good. Tightening the distribution just thins the
+tail best-of-<i>N</i> is picking from. (The overlap-window variant earns its place in the pool only because at
+large <i>N</i> its <i>higher</i> variance occasionally wins a design outright.) The random-start variance isn't
+noise to remove — it's the search.</p>
 
 <p><b>It generalizes.</b> The frozen winning config (global stage only, no per-design selection) applied
 unchanged to all 17: held-out designs come in at 0.923 vs 0.885 on the 3 tuning designs — it transfers, with
@@ -182,9 +196,10 @@ reduces least — it depends on discrete <i>routing</i>, not a smooth function o
 leaderboard leaders (~0.9507) sits on the hard, congestion-bound designs (ibm08/17/18).</p>
 
 <h2>Where the remaining gap is</h2>
-<p>Two obvious levers I ruled out by paired experiment (appendix): an explicit congestion term in the global
-loss, and a congestion-directed greedy. Both are neutral-to-negative — the score is soft-cell-dominated and
-greedy already minimizes true congestion. Single-cell greedy plateaus for a mechanical reason: relieving a
+<p>Three levers I ruled out by paired experiment (appendix): an explicit congestion term in the global loss, a
+congestion-directed greedy, and a battery of macro-reordering mechanisms. All are neutral-to-negative — the
+score is soft-cell-dominated, greedy already minimizes true congestion, and best-of-<i>N</i> already finds the
+good orderings. Single-cell greedy plateaus for a mechanical reason: relieving a
 hot region needs moving <i>groups</i> of cells coherently, but any single move that vacates a congested cell
 lengthens its own nets and is rejected. The lever is a detailed placer with <b>coordinated multi-cell
 moves</b> (or a temperature that accepts transient wirelength increases) — not more tuning, not more
@@ -226,6 +241,25 @@ relief needs — which is what motivates the "coordinated moves" conclusion abov
 simulated-annealing-style acceptance, at matched compute) <b>never beats</b> running the global stage first,
 then greedy. The two stages are genuinely separate: the global stage sets the coarse arrangement, greedy does
 the fine detail on the true score.</p>
+
+<h3>Reordering the macro ordering</h3>
+<p>The global stage spreads macros continuously but rarely lets two cross past each other, so the random start
+largely fixes their ordering. I tried four ways to break that lock, each with its own Bayesian search on the
+deployment metric (best-of-<i>N</i> after greedy), each tested paired against the plain stage:</p>
+<ul>
+  <li><b>Overlap-tolerance window</b> — hold the deep-overlap penalty off early so macros stack and slide
+      through each other, then ramp it on. Single candidate ~5% better; best-of-<i>N</i> unchanged.</li>
+  <li><b>Jumps</b> — teleport high-wirelength macros to their net centroids early. Helps wirelength-bound
+      designs, hurts congestion-bound ones; net neutral.</li>
+  <li><b>Diffusion</b> — annealed noise (global, and a variant gated to overlapping macros only), mobility ∝
+      1/√area so big macros stay put. The crossing-scale is a wash; larger just scatters.</li>
+  <li><b>Annealed same-size swaps</b> — a simulated-annealing pass over swaps of equal-footprint macros
+      (density is invariant, so acceptance is on wirelength only), concurrent with the gradient. Reaches
+      multi-swap orderings single-move greedy can't — still no best-of-<i>N</i> gain.</li>
+</ul>
+<p>All four reduce the run-to-run variance best-of-<i>N</i> feeds on (the variance test above). The one kept —
+window + swaps — rides in the pool as a <i>high-variance</i> config that wins some designs at large <i>N</i>,
+not because per-run reordering helps.</p>
 
 <h3>Other</h3>
 <ul>

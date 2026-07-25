@@ -1,0 +1,163 @@
+{
+  "rows": [
+    {
+      "benchmark": "ibm01",
+      "best_after": 0.7794378399848938,
+      "before_sel": 0.7794378399848938,
+      "greedy_ref": 0.7944295406341553,
+      "personal_best": 0.7794378399848938,
+      "win_trial": -1,
+      "n_cand": 13
+    },
+    {
+      "benchmark": "ibm02",
+      "best_after": 0.9898315072059631,
+      "before_sel": 1.0163774490356445,
+      "greedy_ref": 1.130113959312439,
+      "personal_best": 0.9898315072059631,
+      "win_trial": 221,
+      "n_cand": 13
+    },
+    {
+      "benchmark": "ibm03",
+      "best_after": 0.9338266849517822,
+      "before_sel": 0.9510107636451721,
+      "greedy_ref": 0.9871551990509033,
+      "personal_best": 0.9338266849517822,
+      "win_trial": -1,
+      "n_cand": 13
+    },
+    {
+      "benchmark": "ibm04",
+      "best_after": 0.9213354587554932,
+      "before_sel": 0.9216023683547974,
+      "greedy_ref": 0.9820522665977478,
+      "personal_best": 0.9213354587554932,
+      "win_trial": 221,
+      "n_cand": 13
+    },
+    {
+      "benchmark": "ibm06",
+      "best_after": 1.156843900680542,
+      "before_sel": 1.1682770252227783,
+      "greedy_ref": 1.141674280166626,
+      "personal_best": 1.141674280166626,
+      "win_trial": -1,
+      "n_cand": 13
+    },
+    {
+      "benchmark": "ibm07",
+      "best_after": 1.0084673166275024,
+      "before_sel": 1.038658857345581,
+      "greedy_ref": 1.0972775220870972,
+      "personal_best": 1.0084673166275024,
+      "win_trial": 87,
+      "n_cand": 13
+    },
+    {
+      "benchmark": "ibm08",
+      "best_after": 1.1229183673858643,
+      "before_sel": 1.1229183673858643,
+      "greedy_ref": 1.3031021356582642,
+      "personal_best": 1.1229183673858643,
+      "win_trial": 87,
+      "n_cand": 12
+    },
+    {
+      "benchmark": "ibm09",
+      "best_after": 0.7842696905136108,
+      "before_sel": 0.7857463955879211,
+      "greedy_ref": 0.849615216255188,
+      "personal_best": 0.7842696905136108,
+      "win_trial": -1,
+      "n_cand": 13
+    },
+    {
+      "benchmark": "ibm10",
+      "best_after": 1.0381386280059814,
+      "before_sel": 1.0381386280059814,
+      "greedy_ref": 1.055861234664917,
+      "personal_best": 1.0381386280059814,
+      "win_trial": 222,
+      "n_cand": 10
+    },
+    {
+      "benchmark": "ibm11",
+      "best_after": 0.8511631488800049,
+      "before_sel": 0.8683331608772278,
+      "greedy_ref": 0.9056394696235657,
+      "personal_best": 0.8511631488800049,
+      "win_trial": -1,
+      "n_cand": 13
+    },
+    {
+      "benchmark": "ibm12",
+      "best_after": 1.1646336317062378,
+      "before_sel": 1.1646336317062378,
+      "greedy_ref": 1.2013330459594727,
+      "personal_best": 1.1646336317062378,
+      "win_trial": 222,
+      "n_cand": 10
+    },
+    {
+      "benchmark": "ibm13",
+      "best_after": 0.9079270362854004,
+      "before_sel": 0.9189793467521667,
+      "greedy_ref": 0.9821988940238953,
+      "personal_best": 0.9079270362854004,
+      "win_trial": -1,
+      "n_cand": 12
+    },
+    {
+      "benchmark": "ibm14",
+      "best_after": 1.1249955892562866,
+      "before_sel": 1.1249955892562866,
+      "greedy_ref": 1.1523553133010864,
+      "personal_best": 1.1249955892562866,
+      "win_trial": -1,
+      "n_cand": 10
+    },
+    {
+      "benchmark": "ibm15",
+      "best_after": 1.1154721975326538,
+      "before_sel": 1.1154721975326538,
+      "greedy_ref": 1.1544523239135742,
+      "personal_best": 1.1154721975326538,
+      "win_trial": -1,
+      "n_cand": 11
+    },
+    {
+      "benchmark": "ibm16",
+      "best_after": 1.0711584091186523,
+      "before_sel": 1.0711584091186523,
+      "greedy_ref": 1.1021729707717896,
+      "personal_best": 1.0711584091186523,
+      "win_trial": 87,
+      "n_cand": 10
+    },
+    {
+      "benchmark": "ibm17",
+      "best_after": 1.2242281436920166,
+      "before_sel": 1.2242281436920166,
+      "greedy_ref": 1.2737070322036743,
+      "personal_best": 1.2242281436920166,
+      "win_trial": 87,
+      "n_cand": 8
+    },
+    {
+      "benchmark": "ibm18",
+      "best_after": 1.1743829250335693,
+      "before_sel": 1.1743829250335693,
+      "greedy_ref": 1.2942856550216675,
+      "personal_best": 1.1743829250335693,
+      "win_trial": 87,
+      "n_cand": 11
+    }
+  ],
+  "pb_avg": 1.0208153444177963,
+  "after_avg": 1.0217076750362621,
+  "before_avg": 1.0284912410904379,
+  "n": 17,
+  "prior": 1.0376,
+  "lb1": 0.9507
+}

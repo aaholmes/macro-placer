@@ -294,11 +294,63 @@ def optimize_flips(fe, pos0, sweeps=4, logf=print):
     return fe.ipos.copy(), fe.macro_orient.copy(), cur
 
 
+def _route_index(fe, nh):
+    """Index for route-shift proposals: hot-ROW -> soft SOURCE macros whose nets
+    deposit horizontal demand on that row; hot-COL -> soft SINK macros whose nets
+    deposit vertical demand on that column (exact for 2-pin nets, a good superset
+    for multi-pin). The L-route metric puts a net's H demand on its source's row
+    and V demand on its sink's column, so moving that macro ONE grid cell
+    relocates the whole route."""
+    row_src, col_snk = {}, {}
+    for net in fe.cong_nets:
+        mem = net["members"]
+        o0, ax0, ay0 = mem[0]
+        if o0 >= nh:                                   # movable soft source
+            r, _ = fe._gcell(fe.ipos[o0, 0] + ax0, fe.ipos[o0, 1] + ay0)
+            row_src.setdefault(r, []).append(o0)
+        for (o, ax, ay) in mem[1:]:
+            if o >= nh:                                # movable soft sink
+                _, c = fe._gcell(fe.ipos[o, 0] + ax, fe.ipos[o, 1] + ay)
+                col_snk.setdefault(c, []).append(o)
+    return row_src, col_snk
+
+
+def _route_shift_proposal(fe, rng, row_src, col_snk, gw, gh, gr, gc, hw, hh, W, H):
+    """Pick a hot congestion line (row for H, column for V, sampled by demand)
+    and a macro whose net routes along it; propose the one-cell displacement that
+    moves the route off the hot line. Returns (i, x, y) or None."""
+    if rng.random() < 0.5:                             # horizontal congestion -> shift a source row
+        rows = fe.Hraw.reshape(gr, gc).sum(1)
+        r = int(rng.choice(gr, p=np.clip(rows, 1e-12, None) / np.clip(rows, 1e-12, None).sum()))
+        cand = row_src.get(r)
+        if not cand:
+            return None
+        i = int(cand[rng.integers(len(cand))])
+        dn = rows[r - 1] if r > 0 else np.inf
+        up = rows[r + 1] if r < gr - 1 else np.inf
+        dy = -1.05 * gh if dn <= up else 1.05 * gh
+        x = fe.ipos[i, 0]
+        y = min(max(fe.ipos[i, 1] + dy, hh[i]), H - hh[i])
+    else:                                              # vertical congestion -> shift a sink column
+        cols = fe.Vraw.reshape(gr, gc).sum(0)
+        c = int(rng.choice(gc, p=np.clip(cols, 1e-12, None) / np.clip(cols, 1e-12, None).sum()))
+        cand = col_snk.get(c)
+        if not cand:
+            return None
+        i = int(cand[rng.integers(len(cand))])
+        lf = cols[c - 1] if c > 0 else np.inf
+        rt = cols[c + 1] if c < gc - 1 else np.inf
+        dx = -1.05 * gw if lf <= rt else 1.05 * gw
+        x = min(max(fe.ipos[i, 0] + dx, hw[i]), W - hw[i])
+        y = fe.ipos[i, 1]
+    return i, float(x), float(y)
+
+
 def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0,
                   hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, move_hard=True,
                   move_soft=True, refresh=2000, log_every=2000, logf=print, max_accepts=None,
                   cong_directed=0.0, adapt_sigma=False, group_frac=0.0, group_k=8,
-                  opt_frac=0.0, time_budget_s=None):
+                  opt_frac=0.0, opt_flat=False, route_frac=0.0, time_budget_s=None):
     """Greedy/SA single-move local search using the INCREMENTAL evaluator
     (~55x faster than full recompute). Returns (best_pos, hist).
 
@@ -338,6 +390,9 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
     sigma = 0.02 * min(W, H) if adapt_sigma else jitter_sigma
     sig_lo, sig_hi = 0.02, 0.10 * min(W, H)
     t_start = _time.perf_counter()
+    row_src = col_snk = None
+    if route_frac > 0:
+        row_src, col_snk = _route_index(fe, nh)
 
     for it in range(iters):
         if time_budget_s is not None and it % 128 == 0 and \
@@ -346,6 +401,8 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
         if it and it % refresh == 0:
             field = _cell_field(fe, fe.ipos)
             hot = _hot_from_field(field, fe, fe.ipos, nm)
+            if route_frac > 0:
+                row_src, col_snk = _route_index(fe, nh)
         lo = 0 if move_hard else nh
         hi = nm if move_soft else nh
         if rng.random() < hot_bias:
@@ -379,12 +436,24 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
                     sigma = max(sigma * 0.99, sig_lo)
             continue
 
-        if opt_frac > 0 and not is_hard and rng.random() < opt_frac:
-            t = fe.optimal_xy(i, fe.ipos)            # closed-form WL-optimal spot (+ small noise)
+        if route_frac > 0 and rng.random() < route_frac:
+            t = _route_shift_proposal(fe, rng, row_src, col_snk, gw, gh, gr, gc, hw, hh, W, H)
             if t is None:
                 continue
-            x = min(max(t[0] + rng.normal(0, 0.25 * sigma), hw[i]), W - hw[i])
-            y = min(max(t[1] + rng.normal(0, 0.25 * sigma), hh[i]), H - hh[i])
+            i, x, y = t; is_hard = False             # surgical: move a route off a hot line
+        elif opt_frac > 0 and not is_hard and rng.random() < opt_frac:
+            if opt_flat:                             # sample inside the WL-flat span (free congestion search)
+                sp = fe.optimal_span(i, fe.ipos)
+                if sp is None:
+                    continue
+                x = min(max(rng.uniform(sp[0], sp[1]) if sp[1] > sp[0] else sp[0], hw[i]), W - hw[i])
+                y = min(max(rng.uniform(sp[2], sp[3]) if sp[3] > sp[2] else sp[2], hh[i]), H - hh[i])
+            else:
+                t = fe.optimal_xy(i, fe.ipos)        # closed-form WL-optimal spot (+ small noise)
+                if t is None:
+                    continue
+                x = min(max(t[0] + rng.normal(0, 0.25 * sigma), hw[i]), W - hw[i])
+                y = min(max(t[1] + rng.normal(0, 0.25 * sigma), hh[i]), H - hh[i])
         elif cong_directed > 0 and rng.random() < cong_directed:
             x, y = _directed_target(field, gc, gr, gw, gh, hw[i], hh[i], W, H, rng)
         elif is_hard and rng.random() < jump_frac:

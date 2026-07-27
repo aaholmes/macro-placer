@@ -464,6 +464,34 @@ class FastEval:
         oym = off[own, 1].mean() if own.any() else 0.0
         return float(np.median(ex) - oxm), float(np.median(ey) - oym)
 
+    def optimal_span(self, i, pos):
+        """The wirelength-FLAT interval for macro i: between the lower and upper
+        medians of its nets' interval endpoints, total HPWL is constant in that
+        coordinate. Within it, density/congestion still vary -- so sampling inside
+        the span optimizes them for free. Returns (xlo,xhi,ylo,yhi) or None."""
+        nets, idx, offs = self._macro_wl_ir(i)
+        if not len(nets):
+            return None
+        owner = self.pin_owner[idx]; off = self.pin_off[idx]
+        oc = np.clip(owner, 0, None)
+        x = np.where(owner >= 0, pos[oc, 0] + off[:, 0], off[:, 0])
+        y = np.where(owner >= 0, pos[oc, 1] + off[:, 1], off[:, 1])
+        own = owner == i
+        xin = np.where(own, np.inf, x); xax = np.where(own, -np.inf, x)
+        yin = np.where(own, np.inf, y); yax = np.where(own, -np.inf, y)
+        mnx = np.minimum.reduceat(xin, offs); mxx = np.maximum.reduceat(xax, offs)
+        mny = np.minimum.reduceat(yin, offs); mxy = np.maximum.reduceat(yax, offs)
+        ok = np.isfinite(mnx)
+        if not ok.any():
+            return None
+        ex = np.sort(np.concatenate([mnx[ok], mxx[ok]]))
+        ey = np.sort(np.concatenate([mny[ok], mxy[ok]]))
+        m = len(ex)
+        oxm = off[own, 0].mean() if own.any() else 0.0
+        oym = off[own, 1].mean() if own.any() else 0.0
+        return (float(ex[(m - 1) // 2] - oxm), float(ex[m // 2] - oxm),
+                float(ey[(m - 1) // 2] - oym), float(ey[m // 2] - oym))
+
     def _macro_nets_hpwl(self, i, pos):
         """Vectorized HPWL of every net touching macro i (== [_net_hpwl(j)...])."""
         nets, idx, offs = self._macro_wl_ir(i)

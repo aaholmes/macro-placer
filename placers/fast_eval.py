@@ -437,6 +437,33 @@ class FastEval:
             r = cache[i] = (nets, idx.astype(np.int64), offs.astype(np.int64))
         return r
 
+    def optimal_xy(self, i, pos):
+        """Closed-form wirelength-optimal position for macro i with all others
+        fixed: the median of its nets' bounding intervals (excluding i's own
+        pins), shifted into center coordinates via i's mean pin offset. The
+        classic detailed-placement 'optimal region' -- used as a PROPOSAL; the
+        exact evaluator still accepts/rejects on the full score."""
+        nets, idx, offs = self._macro_wl_ir(i)
+        if not len(nets):
+            return None
+        owner = self.pin_owner[idx]; off = self.pin_off[idx]
+        oc = np.clip(owner, 0, None)
+        x = np.where(owner >= 0, pos[oc, 0] + off[:, 0], off[:, 0])
+        y = np.where(owner >= 0, pos[oc, 1] + off[:, 1], off[:, 1])
+        own = owner == i
+        # min/max of the OTHER pins per net (own pins masked out)
+        xin = np.where(own, np.inf, x); xax = np.where(own, -np.inf, x)
+        yin = np.where(own, np.inf, y); yax = np.where(own, -np.inf, y)
+        mnx = np.minimum.reduceat(xin, offs); mxx = np.maximum.reduceat(xax, offs)
+        mny = np.minimum.reduceat(yin, offs); mxy = np.maximum.reduceat(yax, offs)
+        ok = np.isfinite(mnx)                        # nets with at least one other pin
+        if not ok.any():
+            return None
+        ex = np.concatenate([mnx[ok], mxx[ok]]); ey = np.concatenate([mny[ok], mxy[ok]])
+        oxm = off[own, 0].mean() if own.any() else 0.0
+        oym = off[own, 1].mean() if own.any() else 0.0
+        return float(np.median(ex) - oxm), float(np.median(ey) - oym)
+
     def _macro_nets_hpwl(self, i, pos):
         """Vectorized HPWL of every net touching macro i (== [_net_hpwl(j)...])."""
         nets, idx, offs = self._macro_wl_ir(i)

@@ -298,7 +298,7 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
                   hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, move_hard=True,
                   move_soft=True, refresh=2000, log_every=2000, logf=print, max_accepts=None,
                   cong_directed=0.0, adapt_sigma=False, group_frac=0.0, group_k=8,
-                  time_budget_s=None):
+                  opt_frac=0.0, time_budget_s=None):
     """Greedy/SA single-move local search using the INCREMENTAL evaluator
     (~55x faster than full recompute). Returns (best_pos, hist).
 
@@ -379,7 +379,13 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
                     sigma = max(sigma * 0.99, sig_lo)
             continue
 
-        if cong_directed > 0 and rng.random() < cong_directed:
+        if opt_frac > 0 and not is_hard and rng.random() < opt_frac:
+            t = fe.optimal_xy(i, fe.ipos)            # closed-form WL-optimal spot (+ small noise)
+            if t is None:
+                continue
+            x = min(max(t[0] + rng.normal(0, 0.25 * sigma), hw[i]), W - hw[i])
+            y = min(max(t[1] + rng.normal(0, 0.25 * sigma), hh[i]), H - hh[i])
+        elif cong_directed > 0 and rng.random() < cong_directed:
             x, y = _directed_target(field, gc, gr, gw, gh, hw[i], hh[i], W, H, rng)
         elif is_hard and rng.random() < jump_frac:
             x = rng.uniform(hw[i], W - hw[i]); y = rng.uniform(hh[i], H - hh[i])

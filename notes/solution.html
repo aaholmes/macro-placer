@@ -92,38 +92,44 @@ the score is soft-macro-dominated.</p>
 <h3>Multi-start and the config pool</h3>
 <p>Different random starts vary a lot (~6%), so I place each design from many seeds and keep the best — the gap
 between a single candidate (~1.1) and best-of-<i>N</i> (1.0137). The candidates come from a small <i>pool</i>
-of configs run side by side: the tuned config (below), plus variants — the most useful <b>holds the density
-penalty off early</b> so wirelength can re-sort macro ordering before the layout tightens, with annealed
-same-size macro swaps on top. Different variants win different designs (that one wins 11 of 17), so pooling
-them and keeping the per-design best beats any single config. Best-of-<i>N</i> saturates fast: past a few dozen
+of configs run side by side: the tuned config (below), which <b>holds the deep-overlap penalty off early</b> so
+wirelength can re-sort macro ordering before the layout tightens and adds annealed same-size macro swaps, plus
+the earlier search's window-free configs. Different configs win different designs (the tuned one wins 11 of
+17), so keeping the per-design best beats any single config. Best-of-<i>N</i> saturates fast: past a few dozen
 candidates the gains flatten — the run that produced 1.0137 already sits near that floor.</p>
 
 <h2>The tuned configuration</h2>
-<p>Weights and schedule were tuned by Bayesian optimization (~230 trials) on 3 designs (ibm01/13/17,
-easy/medium/hard), scoring each config by its average ratio to the reference so no design dominates. The
-winning config, picked under best-of-16 multi-start:</p>
+<p>Tuned in two rounds of Bayesian optimization on 3 designs (ibm01/13/17, easy/medium/hard), scoring by the
+average ratio to the reference so no design dominates. A first ~230-trial search on single-seed placements
+found the weight/schedule region; a second, warm-started ~115-trial search then tuned on the <b>deployment
+metric</b> — best-of-3 seeds <i>after</i> a greedy polish, so configs are scored the way they're used — with
+the winner re-picked at best-of-16. That winner is the config below; it wins 11 of 17 designs in the final
+pool (the first search's configs stay in the pool and win the other 6).</p>
 <table class="cfg">
 <thead><tr><th>setting</th><th>value</th></tr></thead>
 <tbody>
-<tr><td>wirelength sharpness</td><td>9.68 (higher = closer to the exact wirelength)</td></tr>
-<tr><td>schedule back-loading</td><td>3.79 (spread early, tighten late)</td></tr>
-<tr><td>density weight (final / start)</td><td>0.078 / ~4% of it</td></tr>
-<tr><td>wirelength weight at start</td><td>58% of full</td></tr>
-<tr><td>density target fill</td><td>0.71</td></tr>
-<tr><td>density smoothing</td><td>0.11</td></tr>
-<tr><td>learning rate</td><td>0.27</td></tr>
+<tr><td>wirelength sharpness</td><td>2.44 (higher = closer to the exact wirelength)</td></tr>
+<tr><td>schedule back-loading</td><td>3.99 (spread early, tighten late)</td></tr>
+<tr><td>density weight (final / start)</td><td>0.074 / ~3% of it</td></tr>
+<tr><td>wirelength weight at start</td><td>73% of full</td></tr>
+<tr><td>density target fill</td><td>0.65</td></tr>
+<tr><td>density smoothing</td><td>0.17</td></tr>
+<tr><td>learning rate</td><td>0.39</td></tr>
+<tr><td>overlap-tolerance window</td><td>deep-overlap penalty off for the first 6% of the run, full by 65%</td></tr>
+<tr><td>same-size swaps</td><td>annealed swap pass over equal-footprint macro pairs, active for the first third</td></tr>
+<tr><td>diffusion term</td><td>searched, tuned to ≈0 (off)</td></tr>
 <tr><td>gradient steps</td><td>5000 tuned → <b>15000 deployed</b> (see below)</td></tr>
 <tr><td>density model</td><td>overflow (beat the electrostatic-field version)</td></tr>
 <tr><td>congestion term</td><td>off — never helped (appendix)</td></tr>
-<tr><td>overlap handling</td><td>external legalizer only</td></tr>
+<tr><td>overlap handling</td><td>external legalizer (only the deep-overlap penalty is windowed early)</td></tr>
 </tbody>
 </table>
 
 <h3>Search trajectory</h3>
-<p class="note">All ~230 tuning trials. Green beats the reference. The single-seed best was later corrected by
-best-of-16 re-scoring; the search plateaus once the differences between good configs fall below the
-seed noise.</p>
-<img class="fig" src="bayes_trials.png" alt="bayes search trajectory">
+<p class="note">The deployment-metric search. Squares = window/swaps/diffusion all off; dots = mechanisms on.
+The winner edges the best mechanism-free config; the search plateaus once the differences between good configs
+fall below the seed noise.</p>
+<img class="fig" src="bayes_swap_trials.png" alt="deployment-metric search trajectory">
 
 <h3>Why <code>iters</code> jumps 5k → 15k</h3>
 <p>The 5000-iteration cap was for search speed, not a finding — and the search pushed the step count to that
@@ -174,8 +180,9 @@ discrete jumps, injected noise, annealed same-size swaps. Each improves the <i>t
 beats best-of-<i>N</i>, and a paired variance test shows why: the mechanisms make runs <i>converge</i> (lower
 mean, up to ~10× lower spread), but best-of-<i>N</i> doesn't want the typical run — it wants the best of many,
 and the random-start spread already produces one at least as good. Tightening the distribution just thins the
-tail best-of-<i>N</i> is picking from. (The overlap-window variant earns its place in the pool only because at
-large <i>N</i> its <i>higher</i> variance occasionally wins a design outright.) The random-start variance isn't
+tail best-of-<i>N</i> is picking from. (The tuned window+swap config wins its 11 designs not by reordering per
+se but because the <i>swaps</i> make it high-variance — a fatter tail for best-of-<i>N</i> to pick from.) The
+random-start variance isn't
 noise to remove — it's the search.</p>
 
 <p><b>It generalizes.</b> The frozen winning config (global stage only, no per-design selection) applied
@@ -257,14 +264,10 @@ deployment metric (best-of-<i>N</i> after greedy), each tested paired against th
       (density is invariant, so acceptance is on wirelength only), concurrent with the gradient. Reaches
       multi-swap orderings single-move greedy can't — still no best-of-<i>N</i> gain.</li>
 </ul>
-<p>All four reduce the run-to-run variance best-of-<i>N</i> feeds on (the variance test above). The one kept —
-window + swaps — rides in the pool as a <i>high-variance</i> config that wins some designs at large <i>N</i>,
-not because per-run reordering helps.</p>
-<img class="fig" src="bayes_swap_trials.png" alt="deployment-metric search trajectory">
-<p class="note">These searches tune on the <b>deployment metric</b> — best-of-3 seeds after a short greedy
-polish, not single-seed — so each config is scored the way it's actually used. The winner (window + swaps)
-edges the no-mechanism baseline in this objective, but the variance test above is why that edge doesn't carry
-to best-of-<i>N</i> on all 17.</p>
+<p>Each search tuned on the <b>deployment metric</b> — best-of-3 seeds after a short greedy polish, not
+single-seed — so configs are scored the way they're used. All four mechanisms reduce the run-to-run variance
+best-of-<i>N</i> feeds on (the variance test above); the one kept — window + swaps, the tuned configuration —
+wins its designs as a <i>high-variance</i> pool member at large <i>N</i>, not because per-run reordering helps.</p>
 
 <h3>Other</h3>
 <ul>

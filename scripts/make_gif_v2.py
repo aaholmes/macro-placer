@@ -90,25 +90,44 @@ def run_diff(seed, capture=False):
     return coord.detach().cpu().numpy(), frames
 
 
-# --- find the winning seed (best of 0..NSEED-1, full pipeline) ---
-best = (1e9, None, None, None)
-for s in range(NSEED):
-    raw, _ = run_diff(s)
-    lg, _, _ = legalize(raw, sz, nh, b.canvas_width, b.canvas_height, gap=0.01)
-    pol, _ = optimize_fast(fe, lg, iters=MOVES, seed=s, T0=0.0, move_hard=False, move_soft=True,
-                           refresh=20000, log_every=10**9, logf=lambda *x: None)
-    pr = proxy_of(pol)
-    print(f"{nm} {WINNER[nm]} seed {s}: {pr:.4f}", flush=True)
-    if pr < best[0]: best = (pr, s, raw, pol)
-win_proxy, win_seed, win_raw, win_pol = best
-print(f"{nm}: winning seed={win_seed} score={win_proxy:.4f}", flush=True)
+# --- pick the winning seed: known per-benchmark (from the best-of-100 run's cycle order),
+#     else sweep. EVERYTHING below (trajectory, legalize, greedy) comes from ONE captured
+#     run, so the frames are self-consistent (GPU nondeterminism makes two replays of the
+#     same seed differ visibly -- mixing replays teleports hard macros between frames).
+KNOWN_SEED = {"ibm01": 0, "ibm09": 4, "ibm17": 4, "ibm18": 4}
+if nm in KNOWN_SEED:
+    win_seed = KNOWN_SEED[nm]
+else:
+    best = (1e9, None)
+    for s in range(NSEED):
+        raw, _ = run_diff(s)
+        lg, _, _ = legalize(raw, sz, nh, b.canvas_width, b.canvas_height, gap=0.01)
+        pol, _ = optimize_fast(fe, lg, iters=MOVES, seed=s, T0=0.0, move_hard=False, move_soft=True,
+                               refresh=20000, log_every=10**9, logf=lambda *x: None)
+        pr = proxy_of(pol)
+        print(f"{nm} {WINNER[nm]} seed {s}: {pr:.4f}", flush=True)
+        if pr < best[0]: best = (pr, s)
+    win_seed = best[1]
 
-# --- replay winning seed with frame capture + closing frames ---
+# --- ONE captured run: trajectory + legalize + greedy all from the same placement ---
 diff_cand, frames = run_diff(win_seed, capture=True)
+# compress the flat early phase: keep a frame only if the score moved >=2% since the last
+# kept frame, or every 4th flat frame (the early WL-clustering clump barely changes).
+kept = [frames[0]]; flat = 0
+for f in frames[1:]:
+    if abs(f[2] - kept[-1][2]) / max(kept[-1][2], 1e-9) >= 0.02 or flat >= 3:
+        kept.append(f); flat = 0
+    else:
+        flat += 1
+frames = kept
 frames.append((diff_cand.copy(), "global placement (final)", proxy_of(diff_cand)))
 legal, _, _ = legalize(diff_cand, sz, nh, b.canvas_width, b.canvas_height, gap=0.01)
 frames.append((legal.copy(), "legalized (zero overlap)", proxy_of(legal)))
+win_pol, _ = optimize_fast(fe, legal, iters=MOVES, seed=win_seed, T0=0.0, move_hard=False,
+                           move_soft=True, refresh=20000, log_every=10**9, logf=lambda *x: None)
+win_proxy = proxy_of(win_pol)
 frames.append((win_pol.copy(), "greedy-polished (final)", win_proxy))
+print(f"{nm}: seed={win_seed} final score={win_proxy:.4f} ({len(frames)} frames)", flush=True)
 
 ref_pos, _, _ = legalize(b.macro_positions.numpy().astype(np.float64), sz, nh, b.canvas_width, b.canvas_height, gap=0.01)
 ref_proxy = proxy_of(ref_pos)

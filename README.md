@@ -89,7 +89,8 @@ Macro centers are free coordinates optimized by Adam against a **smooth surrogat
 Greedy hill-climbing over single-macro moves, accepting only true-score improvements. Warm-started from the global placement, it closes the gap between the smooth surrogate (plus legalization) and the real metric. Co-optimizes **soft macros** (the key lever) and preserves hard-macro legality. Also includes SA, orientation flips, congruent swaps, and an operator-portfolio variant.
 
 ### 6. Tuning & validation pipeline
-- `bayes_search.py` — Bayesian (TPE) search over the loss weights and schedule on 3 representative designs, minimizing mean ratio-to-reference; a `--finalize` stage re-scores the top configs under **best-of-16 multi-start** to pick the winner above the seed-noise floor.
+- `bayes_search.py` — first-round Bayesian (TPE) search over the loss weights and schedule on 3 representative designs (single-seed), minimizing mean ratio-to-reference; a `--finalize` stage re-scores the top configs under **best-of-16 multi-start** to pick the winner above the seed-noise floor.
+- `bayes_swap.py` — second-round, warm-started search that tunes on the **deployment metric** (best-of-3 seeds *after* a short greedy polish) and adds the overlap-window / swap / diffusion mechanisms to the space; its winner is the final tuned config.
 - `validate_all.py` — applies the frozen winner to **all 17** benchmarks (held-out generalization check).
 - `greedy_polish.py` + `final_report.py` — detailed-placement polish and the three-way comparison (global / global+greedy / greedy-from-reference), reporting the per-benchmark best.
 - `parallel_run.py` — 16× throughput: all 17 as independent checkpointed chains across a worker pool.
@@ -97,7 +98,7 @@ Greedy hill-climbing over single-macro moves, accepting only true-score improvem
 ### Also explored
 - `moves.py` — hard-macro swap and rigid cluster moves.
 - `force.py` — a continuous density force field and a RUDY congestion surrogate.
-- `bayes_window.py`, `bayes_swap.py` — the macro-reordering searches (overlap-tolerance window, diffusion, annealed same-size swaps) tuned on the deployment metric (best-of-*N* after greedy); `deploy_best100.py` runs the final config pool.
+- `bayes_window.py` — earlier single-seed search over the overlap-window alone (superseded by `bayes_swap.py`); `variance_diag.py`, `attribution_swap.py` — the paired variance/attribution diagnostics behind finding 6.
 
 ---
 
@@ -115,7 +116,7 @@ Differentiable global placement → legalize → greedy polish, applied to all 1
 | overlaps | 0 (all 17) |
 | best single benchmark (ibm09) | **0.771** |
 
-Every benchmark beats the reference; on the easiest designs (ibm09 0.77, ibm01 0.79) I dip below the current leaderboard leader's *average* (0.9507). The tuned config transfers to the 14 held-out designs with only a mild overfit (held-out mean ratio 0.923 vs 0.885 on the 3 tuning designs). Greedy from the reference alone averages **1.083**; the differentiable global stage supplies a **6.2%** better basin on top of that. The score comes from a best-of-*N*-after-greedy **pool** of configs run side by side — the tuned config plus variants; the most useful holds the density penalty off early so wirelength can re-sort macro ordering (with annealed same-size macro swaps), and it wins **11 of 17** designs while the tuned window-off configs win the other 6. Different configs win different designs, so pooling them and keeping the per-design best beats any single one.
+Every benchmark beats the reference; on the easiest designs (ibm09 0.77, ibm01 0.79) I dip below the current leaderboard leader's *average* (0.9507). The tuned config transfers to the 14 held-out designs with only a mild overfit (held-out mean ratio 0.923 vs 0.885 on the 3 tuning designs). Greedy from the reference alone averages **1.083**; the differentiable global stage supplies a **6.2%** better basin on top of that. The score comes from a best-of-*N*-after-greedy **pool** of configs run side by side: the final tuned config — which holds the deep-overlap penalty off early so wirelength can re-sort macro ordering, with annealed same-size macro swaps — wins **11 of 17** designs, and the earlier search's window-free configs win the other 6. Different configs win different designs, so keeping the per-design best beats any single one.
 
 **Compute.** A single candidate is ~3–6 min (measured: GPU global stage ~80 s, CPU greedy polish ~1–5 min) — inside the challenge's 1-hour-per-benchmark limit. The 1.0137 figure is best-of-*N* (~45 candidates/benchmark within the 1-hour budget, greedy-polished in parallel across 16 cores while the GPU produces the next candidate). A single median candidate averages ~1.1; best-of-*N* saturates fast, and this run already sits near that floor.
 
@@ -149,9 +150,10 @@ These shaped the approach and are worth as much as the score:
 The full pipeline: tune once, finalize the winner under multi-start, validate on all 17, then greedy-polish.
 
 ```bash
-# 1. Bayesian search for the loss weights/schedule (3 designs), then finalize
-uv run python scripts/bayes_search.py                 # search
-uv run python scripts/bayes_search.py --finalize      # best-of-16 pick over the top configs
+# 1. Bayesian search for the loss weights/schedule (3 designs): first round single-seed,
+#    second round on the deployment metric (best-of-3 after greedy); finalize at best-of-16
+uv run python scripts/bayes_search.py && uv run python scripts/bayes_search.py --finalize
+uv run python scripts/bayes_swap.py                   # warm-started deployment-metric round
 
 # 2. Apply the frozen winner to all 17 (held-out validation)
 uv run python scripts/validate_all.py --seeds 8
@@ -186,10 +188,6 @@ The negative results constrain the design as much as the positive ones. Each was
 
 **Concurrent / interleaved global+detailed.** Alternating chunks of Adam steps and greedy moves — every confound-controlled variant, including SA-style acceptance and matched compute — never beats the phase-separated global-then-greedy pipeline. The two stages are genuinely separated: the global stage sets the coarse arrangement, greedy does the exact-metric detail.
 
-**Macro-reordering mechanisms in the global stage.** The differentiable stage spreads macros continuously but rarely lets two cross past each other, so the random start largely fixes their ordering. Four attempts to break that lock, each with its own Bayesian search on best-of-*N*-after-greedy and tested paired against the plain stage: an **overlap-tolerance window** (hold the deep-overlap penalty off early so macros stack and slide through, then ramp it on — single candidate ~5% better, best-of-*N* unchanged); **jumps** (teleport high-wirelength macros to net centroids early — helps wirelength-bound designs, hurts congestion-bound, net neutral); **diffusion** (annealed Langevin noise — global, and a variant gated to overlapping macros only — mobility ∝ 1/√area so big macros stay put; crossing-scale is a wash, larger just scatters); **annealed same-size swaps** (a simulated-annealing pass over swaps of equal-footprint macros — density is invariant, so acceptance is on wirelength only — reaching multi-swap orderings single-move greedy can't, still no best-of-*N* gain). All four reduce the run-to-run variance best-of-*N* exploits; the window+swap variant is the one kept, riding in the final pool as a high-variance config that wins some designs at large *N* (finding 6).
-
-![deployment-metric search](notes/bayes_swap_trials.png)
-
-*These searches tune on the **deployment metric** — best-of-3 seeds after a short greedy, not single-seed — so each config is scored the way it's used. The winner (window+swap) edges the no-mechanism baseline in that objective, but not at best-of-N across all 17 (finding 6).*
+**Macro-reordering mechanisms in the global stage.** The differentiable stage spreads macros continuously but rarely lets two cross past each other, so the random start largely fixes their ordering. Four attempts to break that lock, each with its own Bayesian search on best-of-*N*-after-greedy and tested paired against the plain stage: an **overlap-tolerance window** (hold the deep-overlap penalty off early so macros stack and slide through, then ramp it on — single candidate ~5% better, best-of-*N* unchanged); **jumps** (teleport high-wirelength macros to net centroids early — helps wirelength-bound designs, hurts congestion-bound, net neutral); **diffusion** (annealed Langevin noise — global, and a variant gated to overlapping macros only — mobility ∝ 1/√area so big macros stay put; crossing-scale is a wash, larger just scatters); **annealed same-size swaps** (a simulated-annealing pass over swaps of equal-footprint macros — density is invariant, so acceptance is on wirelength only — reaching multi-swap orderings single-move greedy can't, still no best-of-*N* gain). Each search tuned on the **deployment metric** — best-of-3 seeds after a short greedy, not single-seed — so configs are scored the way they're used. All four mechanisms reduce the run-to-run variance best-of-*N* exploits; the window+swap variant is the one kept — it became the final tuned config, winning its 11 designs as a high-variance pool member at large *N* (finding 6).
 
 **Other.** SA and SA/greedy hybrids (greedy-until-*N*-accepts) — no gain over pure greedy at matched compute. Electrostatic-FFT density mode — equivalent to the overflow penalty, not better. Multi-start initialization variants (density-only, low-congestion, scatter) — see the warm-start row above.

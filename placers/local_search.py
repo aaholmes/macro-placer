@@ -297,7 +297,8 @@ def optimize_flips(fe, pos0, sweeps=4, logf=print):
 def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0,
                   hot_bias=0.7, T0=0.0, Tend=1e-5, gap=1e-3, move_hard=True,
                   move_soft=True, refresh=2000, log_every=2000, logf=print, max_accepts=None,
-                  cong_directed=0.0):
+                  cong_directed=0.0, adapt_sigma=False, group_frac=0.0, group_k=8,
+                  time_budget_s=None):
     """Greedy/SA single-move local search using the INCREMENTAL evaluator
     (~55x faster than full recompute). Returns (best_pos, hist).
 
@@ -306,7 +307,19 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
     jitter/random jump. Acceptance is unchanged (true proxy delta), so this only
     reshapes the proposal distribution toward congestion-relieving moves -- and it
     lets *soft* cells make the long directed jumps that plain jitter forbids. 0.0
-    reproduces the original behaviour exactly."""
+    reproduces the original behaviour exactly.
+
+    adapt_sigma: start the jitter at 2% of the canvas and adapt it to the live
+    acceptance rate (x1.03 on accept, x0.99 on reject) so the step size tracks the
+    descent instead of being one fixed constant for every design and phase.
+    group_frac in [0,1]: fraction of proposals that are COORDINATED GROUP MOVES --
+    translate a soft macro and its group_k nearest soft neighbors by one shared
+    offset, accepted jointly on the true score. Single moves out of a crowded
+    region get rejected because they stretch their own nets; moving the local
+    neighborhood together sidesteps that veto.
+    time_budget_s: optional wall-clock cap (checked every 128 iters).
+    Defaults reproduce the original behaviour exactly."""
+    import time as _time
     rng = np.random.default_rng(seed)
     b = fe.b
     nh = b.num_hard_macros; nm = b.num_macros
@@ -322,8 +335,14 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
     field = _cell_field(fe, fe.ipos)     # rebuilds grid/cong at committed pos
     hot = _hot_from_field(field, fe, fe.ipos, nm)
     accepts = 0
+    sigma = 0.02 * min(W, H) if adapt_sigma else jitter_sigma
+    sig_lo, sig_hi = 0.02, 0.10 * min(W, H)
+    t_start = _time.perf_counter()
 
     for it in range(iters):
+        if time_budget_s is not None and it % 128 == 0 and \
+                _time.perf_counter() - t_start > time_budget_s:
+            break
         if it and it % refresh == 0:
             field = _cell_field(fe, fe.ipos)
             hot = _hot_from_field(field, fe, fe.ipos, nm)
@@ -335,13 +354,38 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
             i = int(rng.integers(lo, hi))
         is_hard = i < nh
 
+        # ---- coordinated group move (soft macros only) ----
+        if group_frac > 0 and not is_hard and rng.random() < group_frac:
+            d2 = ((fe.ipos[nh:, 0] - fe.ipos[i, 0]) ** 2 +
+                  (fe.ipos[nh:, 1] - fe.ipos[i, 1]) ** 2)
+            grp = nh + np.argpartition(d2, min(group_k, nm - nh - 1))[:group_k + 1]
+            ddx = rng.normal(0, sigma); ddy = rng.normal(0, sigma)
+            undos = []
+            for g in grp:
+                gx = min(max(fe.ipos[g, 0] + ddx, hw[g]), W - hw[g])
+                gy = min(max(fe.ipos[g, 1] + ddy, hh[g]), H - hh[g])
+                undos.append(fe.apply_move(int(g), gx, gy))
+            cand = fe.cost_current()
+            if cand < cur - 1e-12:
+                cur = cand; accepts += 1
+                if adapt_sigma:
+                    sigma = min(sigma * 1.03, sig_hi)
+                if cur < best:
+                    best = cur; best_pos = fe.ipos.copy()
+            else:
+                for u in reversed(undos):
+                    fe.undo_move(u)
+                if adapt_sigma:
+                    sigma = max(sigma * 0.99, sig_lo)
+            continue
+
         if cong_directed > 0 and rng.random() < cong_directed:
             x, y = _directed_target(field, gc, gr, gw, gh, hw[i], hh[i], W, H, rng)
         elif is_hard and rng.random() < jump_frac:
             x = rng.uniform(hw[i], W - hw[i]); y = rng.uniform(hh[i], H - hh[i])
         else:
-            x = min(max(fe.ipos[i, 0] + rng.normal(0, jitter_sigma), hw[i]), W - hw[i])
-            y = min(max(fe.ipos[i, 1] + rng.normal(0, jitter_sigma), hh[i]), H - hh[i])
+            x = min(max(fe.ipos[i, 0] + rng.normal(0, sigma), hw[i]), W - hw[i])
+            y = min(max(fe.ipos[i, 1] + rng.normal(0, sigma), hh[i]), H - hh[i])
 
         if is_hard and _overlaps(fe.ipos, i, (x, y), hw, hh, nh, gap):
             continue
@@ -352,12 +396,16 @@ def optimize_fast(fe, pos0, iters=20000, seed=0, jump_frac=0.3, jitter_sigma=1.0
         T = T0 * (Tend / T0) ** (it / iters) if T0 > 0 else 0.0
         if delta < 0 or (T > 0 and rng.random() < np.exp(-delta / T)):
             cur = cand; accepts += 1
+            if adapt_sigma:
+                sigma = min(sigma * 1.03, sig_hi)
             if cur < best:
                 best = cur; best_pos = fe.ipos.copy()
             if max_accepts and accepts >= max_accepts:   # stop after N accepted moves
                 break
         else:
             fe.undo_move(undo)
+            if adapt_sigma:
+                sigma = max(sigma * 0.99, sig_lo)
 
         if it and it % log_every == 0:
             hist.append((it, best))

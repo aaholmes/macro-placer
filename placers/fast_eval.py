@@ -145,13 +145,15 @@ class FastEval:
     def density_cost_from_occ(self, occ):
         gc, gr, gw, gh = self._grid_params()
         cells = occ / (gw * gh)
-        occupied = np.sort(cells[cells != 0.0])[::-1]
+        occupied = cells[cells != 0.0]
         ncells = gr * gc
         cnt = int(np.floor(ncells * 0.1))
         if ncells < 10:
             return 0.5 * float(occupied.mean())
         k = min(cnt, len(occupied))
-        return 0.5 * float(occupied[:k].sum() / cnt)
+        # top-k sum via partition (no full sort needed)
+        top = occupied if k == len(occupied) else np.partition(occupied, len(occupied) - k)[len(occupied) - k:]
+        return 0.5 * float(top.sum() / cnt)
 
     def density_cost(self, pos):
         return self.density_cost_from_occ(self.build_density(np.asarray(pos, np.float64)))
@@ -338,22 +340,31 @@ class FastEval:
                 Hmac[r * gc + c] -= sign * yd * self.hrouting_alloc
 
     def _smooth(self, arr, axis):
-        """TILOS __smooth_routing_cong. axis='V' smooths across columns,
-        'H' smooths across rows. arr is a [gr*gc] flat array."""
+        """TILOS __smooth_routing_cong, vectorized. Each source line spreads
+        A/cnt to the sr-neighborhood (clipped), which is a sliding-window sum of
+        the per-source-normalized array -> computed with one cumsum. axis='V'
+        smooths across columns, 'H' across rows. arr is a [gr*gc] flat array."""
         gc, gr, gw, gh = self._grid_params()
         A = arr.reshape(gr, gc)
-        out = np.zeros_like(A)
         sr = self.smooth_range
+
+        def box(B):
+            # out[:, j] = sum_i B[:, i] for |i-j|<=sr (window clipped at edges)
+            n = B.shape[1]
+            cs = np.zeros((B.shape[0], n + 1), dtype=B.dtype)
+            np.cumsum(B, axis=1, out=cs[:, 1:])
+            lo = np.maximum(np.arange(n) - sr, 0)
+            hi = np.minimum(np.arange(n) + sr, n - 1)
+            return cs[:, hi + 1] - cs[:, lo]
+
         if axis == "V":
-            for col in range(gc):
-                lp = max(col - sr, 0); rp = min(col + sr, gc - 1)
-                cnt = rp - lp + 1
-                out[:, lp:rp + 1] += (A[:, col] / cnt)[:, None]
+            idx = np.arange(gc)
+            cnt = np.minimum(idx + sr, gc - 1) - np.maximum(idx - sr, 0) + 1
+            out = box(A / cnt[None, :])
         else:
-            for row in range(gr):
-                lp = max(row - sr, 0); up = min(row + sr, gr - 1)
-                cnt = up - lp + 1
-                out[lp:up + 1, :] += (A[row, :] / cnt)[None, :]
+            idx = np.arange(gr)
+            cnt = np.minimum(idx + sr, gr - 1) - np.maximum(idx - sr, 0) + 1
+            out = box((A.T / cnt[None, :])).T
         return out.ravel()
 
     def build_congestion(self, pos):
@@ -380,10 +391,10 @@ class FastEval:
         H = Hs + self.Hmac / self.grid_h_routes
         tot = np.concatenate([V, H])
         cnt = int(np.floor(len(tot) * 0.05))
-        s = np.sort(tot)[::-1]
         if cnt == 0:
-            return float(s[0])
-        return float(s[:cnt].mean())
+            return float(tot.max())
+        top = np.partition(tot, len(tot) - cnt)[len(tot) - cnt:]
+        return float(top.mean())
 
     def congestion_cost(self, pos):
         return self.build_congestion(np.asarray(pos, np.float64))
@@ -409,6 +420,34 @@ class FastEval:
         x = np.where(owner >= 0, pos[oc, 0] + off[:, 0], off[:, 0])
         y = np.where(owner >= 0, pos[oc, 1] + off[:, 1], off[:, 1])
         return (x.max() - x.min()) + (y.max() - y.min())
+
+    def _macro_wl_ir(self, i):
+        """Cached per-macro flat pin-index array + reduceat offsets covering all
+        nets that macro touches (for one-shot vectorized HPWL recompute)."""
+        cache = getattr(self, "_mwl", None)
+        if cache is None:
+            cache = self._mwl = {}
+        r = cache.get(i)
+        if r is None:
+            nets = self.macro_nets.get(i, _EMPTY)
+            idx = np.concatenate([np.arange(self.net_start[j], self.net_end[j]) for j in nets]) \
+                if len(nets) else _EMPTY
+            offs = np.concatenate([[0], np.cumsum(self.net_end[nets] - self.net_start[nets])[:-1]]) \
+                if len(nets) else _EMPTY
+            r = cache[i] = (nets, idx.astype(np.int64), offs.astype(np.int64))
+        return r
+
+    def _macro_nets_hpwl(self, i, pos):
+        """Vectorized HPWL of every net touching macro i (== [_net_hpwl(j)...])."""
+        nets, idx, offs = self._macro_wl_ir(i)
+        if not len(nets):
+            return nets, None
+        owner = self.pin_owner[idx]; off = self.pin_off[idx]
+        oc = np.clip(owner, 0, None)
+        x = np.where(owner >= 0, pos[oc, 0] + off[:, 0], off[:, 0])
+        y = np.where(owner >= 0, pos[oc, 1] + off[:, 1], off[:, 1])
+        return nets, ((np.maximum.reduceat(x, offs) - np.minimum.reduceat(x, offs)) +
+                      (np.maximum.reduceat(y, offs) - np.minimum.reduceat(y, offs)))
 
     # Klein-4 orientations: sign applied to pin offsets (N, FN=mirror-x,
     # FS=mirror-y, S=180). Footprint unchanged, so no overlap/density change.
@@ -463,6 +502,7 @@ class FastEval:
             self._build_congestion_ir()
         self._build_wl_slices()
         self._init_orient()
+        self._sz = self.b.macro_sizes.numpy()          # cached (hot path)
         self.ipos = np.asarray(pos, np.float64).copy()
         # wirelength: per-net hpwl + running weighted sum
         self.wl_net = np.array([self._net_hpwl(j, self.ipos)
@@ -483,7 +523,7 @@ class FastEval:
 
     def _add_macro_density(self, i, sign):
         gc = self.plc.grid_col
-        sz = self.b.macro_sizes.numpy()
+        sz = self._sz
         r = self._macro_cell_area(self.ipos[i, 0], self.ipos[i, 1], sz[i, 0], sz[i, 1])
         if r is None:
             return
@@ -497,61 +537,70 @@ class FastEval:
         self._route_net(gset, src, net["weight"], self.Hraw, self.Vraw, sign)
 
     def _add_shadow(self, i, sign):
-        sz = self.b.macro_sizes.numpy()
+        sz = self._sz
         self._macro_shadow(self.ipos[i, 0], self.ipos[i, 1], sz[i, 0], sz[i, 1],
                            self.Hmac, self.Vmac, sign)
 
     def apply_move(self, i, x, y):
         """Move macro i to (x,y), updating all live state incrementally.
-        Returns an undo token for exact revert."""
+        Returns an undo token for exact revert. Undo restores SNAPSHOTS of the
+        (small) grid arrays taken here -- bitwise-exact and much cheaper than
+        re-running the deposit routines in reverse."""
         nh = self.b.num_hard_macros
         is_hard = i < nh
         cong_nets = self._macro_cong_arr.get(i, _EMPTY)
         wl_nets = self.macro_nets.get(i, _EMPTY)
         undo = dict(i=i, old=self.ipos[i].copy(), wl_sum=self.wl_sum,
                     wl_nets=wl_nets, wl_vals=self.wl_net[wl_nets].copy()
-                    if len(wl_nets) else None)
+                    if len(wl_nets) else None,
+                    occ=self.grid_occupied.copy(),
+                    Hraw=self.Hraw.copy(), Vraw=self.Vraw.copy(),
+                    Hmac=self.Hmac.copy() if is_hard else None,
+                    Vmac=self.Vmac.copy() if is_hard else None)
+        # routing depends only on pin GRID CELLS: if no pin of this macro changes
+        # cell (common for sub-cell jitters), every touched net's deposit is
+        # identical and the re-route can be skipped entirely.
+        pins = self.macro_pins.get(i)
+        skip_route = False
+        if pins is not None and len(pins) and not is_hard:
+            gc, gr, gw, gh = self._grid_params()
+            ox = self.pin_off[pins, 0]; oy = self.pin_off[pins, 1]
+            oc_ = np.clip(np.floor((self.ipos[i, 0] + ox) / gw).astype(np.int64), 0, gc - 1)
+            or_ = np.clip(np.floor((self.ipos[i, 1] + oy) / gh).astype(np.int64), 0, gr - 1)
+            nc_ = np.clip(np.floor((x + ox) / gw).astype(np.int64), 0, gc - 1)
+            nr_ = np.clip(np.floor((y + oy) / gh).astype(np.int64), 0, gr - 1)
+            skip_route = bool(np.array_equal(oc_, nc_) and np.array_equal(or_, nr_))
         # --- remove old contributions (at current ipos[i]) ---
         self._add_macro_density(i, -1.0)
-        for j in cong_nets:
-            self._add_net_route(int(j), -1.0)
+        if not skip_route:
+            for j in cong_nets:
+                self._add_net_route(int(j), -1.0)
         if is_hard:
             self._add_shadow(i, -1.0)
         # --- move ---
         self.ipos[i, 0] = x; self.ipos[i, 1] = y
         # --- add new contributions ---
         self._add_macro_density(i, +1.0)
-        for j in cong_nets:
-            self._add_net_route(int(j), +1.0)
+        if not skip_route:
+            for j in cong_nets:
+                self._add_net_route(int(j), +1.0)
         if is_hard:
             self._add_shadow(i, +1.0)
-        # --- wirelength: recompute affected nets ---
+        # --- wirelength: recompute affected nets (vectorized across the nets) ---
         if len(wl_nets):
-            new = np.array([self._net_hpwl(int(j), self.ipos) for j in wl_nets])
+            _, new = self._macro_nets_hpwl(i, self.ipos)
             self.wl_sum += float((self.net_weight[wl_nets] * (new - self.wl_net[wl_nets])).sum())
             self.wl_net[wl_nets] = new
         return undo
 
     def undo_move(self, undo):
+        """Restore the pre-move snapshots -- bitwise-exact, no re-deposits."""
         i = undo["i"]
-        # reverse the deposits by re-applying with the positions swapped
-        new = self.ipos[i].copy()
-        is_hard = i < self.b.num_hard_macros
-        cong_nets = self._macro_cong_arr.get(i, _EMPTY)
-        # remove current (new) contributions
-        self._add_macro_density(i, -1.0)
-        for j in cong_nets:
-            self._add_net_route(int(j), -1.0)
-        if is_hard:
-            self._add_shadow(i, -1.0)
-        # restore old position and re-add
         self.ipos[i] = undo["old"]
-        self._add_macro_density(i, +1.0)
-        for j in cong_nets:
-            self._add_net_route(int(j), +1.0)
-        if is_hard:
-            self._add_shadow(i, +1.0)
-        # restore wirelength exactly
+        self.grid_occupied = undo["occ"]
+        self.Hraw = undo["Hraw"]; self.Vraw = undo["Vraw"]
+        if undo["Hmac"] is not None:
+            self.Hmac = undo["Hmac"]; self.Vmac = undo["Vmac"]
         self.wl_sum = undo["wl_sum"]
         if undo["wl_vals"] is not None:
             self.wl_net[undo["wl_nets"]] = undo["wl_vals"]

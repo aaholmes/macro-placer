@@ -24,8 +24,13 @@ DEADLINE_MIN = float(os.environ.get("DEADLINE_MIN", "45"))
 ITERS = int(os.environ.get("ITERS", "15000"))
 MOVES = int(os.environ.get("MOVES", "100000"))
 OPS = os.environ.get("OPS", "")
-OP_KW = {"": {}, "ops": dict(opt_frac=0.25, opt_flat=True, route_frac=0.2),
-         "ops_sa": dict(opt_frac=0.25, opt_flat=True, route_frac=0.2, T0=3e-4, Tend=1e-6)}[OPS]
+TAG = os.environ.get("TAG", "v2")
+if os.environ.get("OPS_JSON"):                       # tuned knob file overrides OPS presets
+    OP_KW = json.load(open(os.environ["OPS_JSON"]))["kw"]
+    OPS = "json:" + os.environ["OPS_JSON"]
+else:
+    OP_KW = {"": {}, "ops": dict(opt_frac=0.25, opt_flat=True, route_frac=0.2),
+             "ops_sa": dict(opt_frac=0.25, opt_flat=True, route_frac=0.2, T0=3e-4, Tend=1e-6)}[OPS]
 
 _CACHE = {}
 
@@ -85,13 +90,13 @@ def main():
     from placers.fast_eval import FastEval
     from placers.legalizer import legalize
     from placers.analytical import DifferentiablePlacer
-    os.makedirs(f"{ROOT}/notes/deploy_v2", exist_ok=True)
+    os.makedirs(f"{ROOT}/notes/deploy_{TAG}", exist_ok=True)
     pool_cfg = json.load(open(f"{ROOT}/notes/best100_pool.json"))
     dflt = dict(ov_hold=0.0, ov_ramp=0.0, swap_T0=0.0, swap_frac=0.3, gdiff_D0=0.0, gdiff_frac=0.3)
     hps = [{**bs.hp_from({**dflt, **p}), "iters": ITERS} for p in pool_cfg]
     labels = [p["_label"] for p in pool_cfg]
     tuned = labels.index("t94_win+swap")
-    print(f"deploy_v2: OPS='{OPS}' kw={OP_KW}  DEADLINE_MIN={DEADLINE_MIN} pool={labels}", flush=True)
+    print(f"deploy_{TAG}: OPS='{OPS}' kw={OP_KW}  DEADLINE_MIN={DEADLINE_MIN} pool={labels}", flush=True)
     gp = mp.get_context("spawn").Pool(max(2, min(30, (os.cpu_count() or 4) - 2)))
     results = {}; wins = {}
     for nm in ALL:
@@ -122,12 +127,12 @@ def main():
             if pr < best:
                 best, bl, bpol = pr, lbl, pol
         results[nm] = best; wins[bl] = wins.get(bl, 0) + 1
-        np.savez(f"{ROOT}/notes/deploy_v2/{nm}_best.npz", placement=bpol)
+        np.savez(f"{ROOT}/notes/deploy_{TAG}/{nm}_best.npz", placement=bpol)
         print(f"[{time.strftime('%H:%M:%S')}] {nm}: {cnt+1} cands, best={best:.4f} (won by {bl}) "
               f"| running avg={np.mean(list(results.values())):.4f}", flush=True)
     avg = float(np.mean(list(results.values())))
     json.dump({"per_bench": results, "after_avg": avg, "wins": wins, "ops": OPS,
-               "deadline_min": DEADLINE_MIN}, open(f"{ROOT}/notes/deploy_v2_report.json", "w"), indent=1)
+               "deadline_min": DEADLINE_MIN}, open(f"{ROOT}/notes/deploy_{TAG}_report.json", "w"), indent=1)
     print(f"\nAFTER_AVG = {avg:.4f}   (best100 1.0137, original 1.0155)", flush=True)
     print(f"wins: {wins}", flush=True)
     gp.close()

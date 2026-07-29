@@ -38,9 +38,10 @@ def init_bank(nm):
     T.set_num_threads(1)
     b, plc, fe = _load(nm)
     cands = []
-    v2 = f"{ROOT}/notes/deploy_v2/{nm}_best.npz"
-    if os.path.exists(v2):
-        cands.append(np.load(v2)["placement"].astype(np.float64))
+    for src in [f"{BANK}/{nm}.npz", f"{ROOT}/notes/deploy_v2/{nm}_best.npz",
+                f"{ROOT}/notes/deploy_v3/{nm}_best.npz"]:   # existing bank first: never regress
+        if os.path.exists(src):
+            cands.append(np.load(src)["placement"].astype(np.float64))
     best = (1e9, None)
     for d in DIRS:
         for f in glob.glob(f"{ROOT}/notes/{d}/{nm}_p*_final.json"):
@@ -76,6 +77,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--moves", type=int, default=200000)
     ap.add_argument("--max-rounds", type=int, default=6)
+    ap.add_argument("--seed-base", type=int, default=100)
     a = ap.parse_args()
     os.makedirs(BANK, exist_ok=True)
     pool = mp.get_context("spawn").Pool(max(2, min(14, (os.cpu_count() or 4) - 2)))
@@ -85,7 +87,7 @@ if __name__ == "__main__":
     print(f"bank initialized: avg={avg:.4f}", flush=True)
     log["init_avg"] = avg
     for rnd in range(a.max_rounds):
-        res = pool.map(round_bench, [(nm, a.moves, 100 + rnd) for nm in ALL])
+        res = pool.map(round_bench, [(nm, a.moves, a.seed_base + rnd) for nm in ALL])
         new = {nm: v1 for nm, v0, v1 in res}
         navg = float(np.mean(list(new.values())))
         gain = avg - navg

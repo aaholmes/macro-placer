@@ -55,10 +55,16 @@ def polish_worker(args):
     from placers.legalizer import legalize
     from placers.local_search import optimize_fast
     b, plc, fe, sz = _bench(nm)
-    lg = raw if legal else legalize(raw, sz, b.num_hard_macros, b.canvas_width, b.canvas_height, gap=0.01)[0]
+    resid = 0
+    if legal:
+        lg = raw
+    else:
+        lg, _, resid = legalize(raw, sz, b.num_hard_macros, b.canvas_width, b.canvas_height, gap=0.01)
     p, _ = optimize_fast(fe, lg, iters=moves, seed=seed, move_hard=False, move_soft=True,
                          refresh=20000, log_every=10**9, logf=lambda *x: None, **({"T0": 0.0} | kw))
     v = float(fe.wirelength_cost(p) + 0.5 * fe.density_cost(p) + 0.5 * fe.congestion_cost(p))
+    if resid:                                          # residual hard overlap -> can never be selected
+        v += 1.0
     return v, p
 
 

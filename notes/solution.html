@@ -30,7 +30,7 @@ prebuilt components. <i>Macro placement</i> is deciding where those blocks go, a
 the finished chip is. This is my solver for a benchmark challenge that grades each placement with one number
 — mostly wirelength, plus density and routing congestion; lower is better, no blocks may overlap. Each
 animation replays one complete run: the <b>reference</b> placement the benchmark comes with (left), my
-placer working (middle) — spreading, legalizing, then polishing — and the <b>score</b> per frame (right;
+placer working (middle) — spreading, legalizing, then improving — and the <b>score</b> per frame (right;
 dashed line = reference). Blocks are rectangles, cell clusters are dots.</p>
 <img class="wide" src="opt_ibm01.gif" alt="ibm01: reference | optimization | score curve">
 <img class="wide" src="opt_ibm09.gif" alt="ibm09: reference | optimization | score curve">
@@ -40,38 +40,49 @@ dashed line = reference). Blocks are rectangles, cell clusters are dots.</p>
 <p><b>Result.</b> Starting from random placements, with one hour per benchmark, my placer averages
 <b>0.9758</b> across all 17 — <b>34% below</b> the provided reference placements (avg 1.477; the RePlAce
 academic tool scores 1.458, simulated annealing 2.125) — beating the reference on every design with zero
-overlaps, verified on the official scorer. An earlier version of this pipeline reached 1.0155; the version
-described here improves on it by 3.9%. The hour is measured strictly: a hard wall clock covering everything,
+overlaps, verified on the official scorer. The hour is measured strictly: a hard wall clock covering everything,
 run on hardware slower than the competition machines — so the budget claim is conservative.</p>
 
 <img class="fig" src="fig_perbench.png" alt="per-benchmark comparison">
 
 <h2>How it works</h2>
-<p>The score is <b>1.0·wirelength + 0.5·density + 0.5·congestion</b>. Three stages, scheduled into one hour:</p>
+<p>The score is <b>1.0·wirelength + 0.5·density + 0.5·congestion</b>. The core idea is to <b>combine a smooth
+   global optimization of a differentiable proxy with simulated annealing using the full, non-differentiable
+   loss</b> — two optimization stages, with a legalization step in between, all scheduled into one hour:</p>
 <ul>
   <li><b>1 · Gradient-based global placement (GPU).</b> Treat every block's position as a free variable and
-      run gradient descent on a smooth approximation of the score (the real score isn't differentiable).
-      Weights follow a schedule — loose early so connected blocks pull together, tightened late — which
-      avoids the traps a full-strength objective falls into from step one.</li>
+      run gradient descent on a smooth proxy <i>of</i> the proxy score (the real score isn't differentiable).
+      It uses only wirelength and density; congestion is left out, because no differentiable congestion
+      surrogate I built helped — even one that correlated 0.995 with the real thing. The two terms are
+      scheduled: <b>wirelength first, which pulls connected blocks into a clump, then density ramps in and
+      pushes them apart.</b> That's the bunching-then-spreading in the animations above, and it avoids the
+      traps a full-strength objective falls into from step one. I tested the opposite schedule, spread-first,
+      and this one won.</li>
   <li><b>2 · Legalization.</b> Push overlapping blocks apart until nothing overlaps, moving each as little
       as possible.</li>
-  <li><b>3 · Annealed local search on the exact score.</b> Move one cell at a time, ~1 ms per move on a fast
-      reimplementation of the official scorer (validated to match it). Rather than random moves, most
-      proposals are <i>computed</i>: the mathematically optimal spot for a cell given its wires, positions
-      where wirelength provably doesn't change (so density and congestion improve for free), and
-      <b>route-shifts</b> — nudging a wire's endpoint one grid cell so its whole route leaves a congested
+  <li><b>3 · Annealed local search on the exact score.</b> Propose a small change, score it exactly, accept
+      it by the standard annealing rule — ~1 ms per move on a fast reimplementation of the official scorer
+      (validated to match it). Proposals move one cell, or a small cluster of neighbors together, and rather
+      than being random they are mostly <i>computed</i>: the mathematically optimal spot for a cell given its
+      wires, positions where wirelength provably doesn't change (so density and congestion improve for free),
+      and <b>route-shifts</b> — nudging a wire's endpoint one grid cell so its whole route leaves a congested
       row or column. A small "temperature" accepts occasional score increases so these disruptions can pay
-      off a few moves later. This stage does most of the work.</li>
+      off a few moves later. This stage does most of the work.
+      <br><br>
+      <b>The key point: the heuristics only decide where to look; acceptance always uses the real score.</b>
+      Proposals can be approximate, biased, even wrong — anything that doesn't help is simply rejected. That
+      is how congestion improved without ever needing a congestion model good enough to optimize directly.</li>
   <li><b>The hour.</b> Generate ~8 global placements (a tuned configuration, a few variants, one started
-      from the reference), give each a quick polish, keep the best two and polish them deeply — then spend
-      all remaining time running 12 parallel polishing copies of the current best, keeping the winner,
-      repeatedly until time runs out. Deep repeated polish of one good placement beats collecting more
+      from the reference), give each a quick improvement pass, keep the best two and improve them deeply — then
+      spend all remaining time running 12 parallel annealed copies of the current best, keeping the winner,
+      repeatedly until time runs out. Deep repeated improvement of one good placement beats collecting more
       placements.</li>
 </ul>
 
 <h2>The tuned configuration</h2>
-<p>All settings were tuned by Bayesian optimization on 3 designs (easy / medium / hard); the other 14 are
-held out. Configurations are always compared on identical random seeds — single-seed differences are mostly
+<p>About fifteen hyperparameters, tuned by Bayesian optimization on 3 designs (easy / medium / hard) and
+reported on all 17; the other 14 are held out. Configurations are always compared on paired random seeds,
+so I wasn't comparing lucky runs — single-seed differences are mostly
 luck.</p>
 <table>
 <thead><tr><th>setting</th><th>value</th></tr></thead>
@@ -95,9 +106,9 @@ configurations fall below run-to-run noise.</p>
 <ul>
   <li><b>Compare on identical seeds, decide on many.</b> Run-to-run noise (~2%) is bigger than the gap
       between good configurations, so single-run rankings mostly measure luck. But collecting placements
-      saturates after a few dozen — reallocating that time into deep repeated polish of the single best
+      saturates after a few dozen — reallocating that time into deep repeated improvement of the single best
       placement is where most of the final margin came from.</li>
-  <li><b>An apparent performance ceiling was really a budget ceiling.</b> Scores stalled near 1.015 for a
+  <li><b>An apparent performance ceiling was really a budget ceiling.</b> Scores stalled for a
       long time, and no clever mechanism moved them. The real limit was the number of local-search moves:
       the search simply hadn't converged, and deeper passes kept improving well past the point where I had
       been stopping.</li>

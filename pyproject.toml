@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "macro-placer"
-version = "1.1.0"
+version = "1.2.0"
 description = "GPU macro placer: gradient global placement, push-apart legalization, annealed local search"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -16,6 +16,7 @@ dependencies = ["numpy", "torch"]
 # challenge repo's macro_place package; the core placer does not need it.
 challenge = []
 test = ["pytest"]
+viz = ["matplotlib", "pillow"]
 
 [tool.setuptools]
 packages = ["placers"]

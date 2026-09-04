@@ -184,7 +184,7 @@ def input_from_challenge(b, plc) -> PlacementInput:
     )
 
 
-def _diff_stage(P, seed, hp, iters, deadline):
+def _diff_stage(P, seed, hp, iters, deadline, on_frame=None, frame_every=500):
     """Gradient global placement (the diff_place core loop, no swap/diffusion)."""
     import torch
     from placers.analytical import anneal, lapsum_topk_mean
@@ -200,6 +200,8 @@ def _diff_stage(P, seed, hp, iters, deadline):
     for it in range(iters):
         if deadline is not None and it % 100 == 0 and time.monotonic() > deadline:
             break
+        if on_frame is not None and it % frame_every == 0:
+            on_frame("diff", it, coord.detach().cpu().numpy())
         t = it / iters
         te = t ** hp["ramp_p"]
         gamma = anneal(te, P.gw * hp["gamma"], P.gw, geometric=True)
@@ -220,12 +222,18 @@ def _diff_stage(P, seed, hp, iters, deadline):
 
 def place(p: PlacementInput, budget_s: float, seed: int,
           iters: int | None = None, ls_iters: int | None = None,
-          hp: dict | None = None, device=None) -> PlaceResult:
+          hp: dict | None = None, device=None,
+          on_frame=None, frame_every: int = 500) -> PlaceResult:
     """Run the full pipeline: gradient placement -> legalize -> local search.
 
     budget_s splits ~40/60 between the gradient and local-search stages.
     Passing explicit iters/ls_iters disables the wall-clock cutoffs, which
     makes the result deterministic for a given seed and device.
+
+    on_frame(stage, it, pos), if given, is called every frame_every gradient
+    iterations and once after legalization and after local search; it is
+    read-only and never changes the trajectory (placers.viz.TrajectoryRecorder
+    is the intended consumer).
     """
     import torch
     from placers.analytical import DifferentiablePlacer
@@ -240,10 +248,13 @@ def place(p: PlacementInput, budget_s: float, seed: int,
 
     fixed_counts = iters is not None or ls_iters is not None
     diff_deadline = None if fixed_counts else t0 + 0.4 * budget_s
-    pos = _diff_stage(P, seed, hp, iters or 5000, diff_deadline)
+    pos = _diff_stage(P, seed, hp, iters or 5000, diff_deadline,
+                      on_frame=on_frame, frame_every=frame_every)
 
     sizes = np.asarray(p.sizes, np.float64)
     pos, _, _ = legalize(pos, sizes, p.num_hard, p.width, p.height, seed=seed)
+    if on_frame is not None:
+        on_frame("legal", 0, pos)
 
     logf = lambda *a, **k: None
     if ls_iters is not None:
@@ -253,6 +264,8 @@ def place(p: PlacementInput, budget_s: float, seed: int,
         pos, _ = optimize_fast(fe, pos, iters=10 ** 9, seed=seed,
                                time_budget_s=remaining, logf=logf)
     pos, _, _ = legalize(pos, sizes, p.num_hard, p.width, p.height, seed=seed)
+    if on_frame is not None:
+        on_frame("final", 0, pos)
 
     return PlaceResult(positions=np.asarray(pos, np.float64),
                        num_hard=p.num_hard, seed=seed,

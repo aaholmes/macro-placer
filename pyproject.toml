@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "macro-placer"
+version = "1.1.0"
+description = "GPU macro placer: gradient global placement, push-apart legalization, annealed local search"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = ["numpy", "torch"]
+
+[project.optional-dependencies]
+# File-based scripts and the parity test load benchmarks through the
+# challenge repo's macro_place package; the core placer does not need it.
+challenge = []
+test = ["pytest"]
+
+[tool.setuptools]
+packages = ["placers"]
+
+[tool.pytest.ini_options]
+markers = ["parity: needs the macro_place package and local benchmark files"]

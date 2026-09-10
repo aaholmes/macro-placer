@@ -91,14 +91,17 @@ def hp_from(p):
                 swap_T0=p.get("swap_T0", 0.0), swap_frac=p.get("swap_frac", 0.3))
 
 
-def diff_place(P, seed, hp):
+def diff_place(P, seed, hp, x0=None):
     """Diff stage: overlap window + (opt) independent global Langevin diffusion (gdiff_D0
     high -> 0 by gdiff_frac) + (opt) SA swaps of adjacent same-size macros (swap_T0 -> 0 by
     swap_frac). Density is invariant under same-size swaps, so swap Metropolis uses WL only."""
     from placers.analytical import anneal, lapsum_topk_mean
-    g = torch.Generator(device="cpu").manual_seed(seed)
-    c0 = torch.rand(P.b.num_macros, 2, generator=g)
-    c0[:, 0] = c0[:, 0] * (P.W - 2) + 1; c0[:, 1] = c0[:, 1] * (P.H - 2) + 1
+    if x0 is None:
+        g = torch.Generator(device="cpu").manual_seed(seed)
+        c0 = torch.rand(P.b.num_macros, 2, generator=g)
+        c0[:, 0] = c0[:, 0] * (P.W - 2) + 1; c0[:, 1] = c0[:, 1] * (P.H - 2) + 1
+    else:                                          # warm start (e.g. placers.quadratic)
+        c0 = torch.tensor(np.asarray(x0, np.float32))
     coord = c0.to(P.dev).requires_grad_(True)
     opt = torch.optim.Adam([coord], lr=hp["lr"])
     LD0 = hp["lam_d_end"] * hp["lam_d_ratio"]; LD1 = hp["lam_d_end"]

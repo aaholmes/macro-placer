@@ -184,15 +184,47 @@ def input_from_challenge(b, plc) -> PlacementInput:
     )
 
 
-def _diff_stage(P, seed, hp, iters, deadline, on_frame=None, frame_every=500):
-    """Gradient global placement (the diff_place core loop, no swap/diffusion)."""
+INITS = ("random", "quadratic_b2b", "quadratic_b2b_jitter", "corner_screen")
+
+# Corner-assignment screen defaults (placers.corner_seeds.corner_screen).
+DEFAULT_CORNER = dict(M=12, N=200, K1=16, K2=4)
+
+
+def initial_positions(P, seed, init="random", jitter_sigma=0.25, x0=None):
+    """Starting coordinates [N,2] float32 for the gradient stage.
+
+    random: uniform in the core, seeded (the original start).
+    quadratic_b2b: the bound-to-bound quadratic minimum (placers.quadratic);
+        deterministic, so every seed starts from the same point.
+    quadratic_b2b_jitter: the same plus seeded Gaussian noise with standard
+        deviation jitter_sigma * median block size, so multi-start keeps its
+        diversity while every start sits near the wirelength minimum.
+    """
+    import torch
+    if init == "random":
+        g = torch.Generator(device="cpu").manual_seed(seed)
+        c0 = torch.rand(P.b.num_macros, 2, generator=g)
+        c0[:, 0] = c0[:, 0] * (P.W - 2) + 1
+        c0[:, 1] = c0[:, 1] * (P.H - 2) + 1
+        return c0
+    if init == "given":
+        return torch.tensor(np.asarray(x0, np.float32)[:, :2])
+    if init not in ("quadratic_b2b", "quadratic_b2b_jitter"):
+        raise ValueError(f"init must be one of {INITS}, got {init!r}")
+    from placers.quadratic import quadratic_place
+    sig = jitter_sigma if init == "quadratic_b2b_jitter" else 0.0
+    pos = quadratic_place(P.fe, jitter_sigma=sig, seed=seed, device=P.dev)
+    return torch.tensor(pos, dtype=torch.float32)
+
+
+def _diff_stage(P, seed, hp, iters, deadline, on_frame=None, frame_every=500,
+                init="random", jitter_sigma=0.25, x0=None):
+    """Gradient global placement (the diff_place core loop, no swap/diffusion).
+    init="given" starts from x0 [N,2]."""
     import torch
     from placers.analytical import anneal, lapsum_topk_mean
 
-    g = torch.Generator(device="cpu").manual_seed(seed)
-    c0 = torch.rand(P.b.num_macros, 2, generator=g)
-    c0[:, 0] = c0[:, 0] * (P.W - 2) + 1
-    c0[:, 1] = c0[:, 1] * (P.H - 2) + 1
+    c0 = initial_positions(P, seed, init, jitter_sigma, x0)
     coord = c0.to(P.dev).requires_grad_(True)
     opt = torch.optim.Adam([coord], lr=hp["lr"])
     LD0 = hp["lam_d_end"] * hp["lam_d_ratio"]
@@ -223,8 +255,19 @@ def _diff_stage(P, seed, hp, iters, deadline, on_frame=None, frame_every=500):
 def place(p: PlacementInput, budget_s: float, seed: int,
           iters: int | None = None, ls_iters: int | None = None,
           hp: dict | None = None, device=None,
-          on_frame=None, frame_every: int = 500) -> PlaceResult:
+          on_frame=None, frame_every: int = 500,
+          init: str = "random", jitter_sigma: float = 0.25,
+          corner: dict | None = None) -> PlaceResult:
     """Run the full pipeline: gradient placement -> legalize -> local search.
+
+    init selects the gradient stage's starting positions (see
+    initial_positions): "random" (default), "quadratic_b2b", or
+    "quadratic_b2b_jitter" with noise jitter_sigma * median block size.
+    init="corner_screen" instead runs the corner-assignment screen
+    (placers.corner_seeds, parameters from `corner` over DEFAULT_CORNER):
+    screen 2 already performs the gradient stage and legalization on each
+    survivor, so the pipeline continues from the (seed mod K2)-th best of its
+    K2 seeds. Screen time is charged to budget_s.
 
     budget_s splits ~40/60 between the gradient and local-search stages.
     Passing explicit iters/ls_iters disables the wall-clock cutoffs, which
@@ -248,8 +291,24 @@ def place(p: PlacementInput, budget_s: float, seed: int,
 
     fixed_counts = iters is not None or ls_iters is not None
     diff_deadline = None if fixed_counts else t0 + 0.4 * budget_s
-    pos = _diff_stage(P, seed, hp, iters or 5000, diff_deadline,
-                      on_frame=on_frame, frame_every=frame_every)
+    corner_cfg = None
+    if init == "corner_screen":
+        from placers.corner_seeds import corner_screen
+        corner_cfg = {**DEFAULT_CORNER, **(corner or {})}
+        res = corner_screen(P, hp, iters or 5000, seed=seed, deadline=diff_deadline,
+                            **corner_cfg)
+        pos = res.seeds[seed % len(res.seeds)]
+        if on_frame is not None:
+            on_frame("diff", 0, pos)
+        corner_cfg["t_screen1"] = res.t_screen1; corner_cfg["t_screen2"] = res.t_screen2
+        corner_cfg["screen2"] = [dict(assignment=r["assignment"], hpwl=r["hpwl"],
+                                      score=r["score"]) for r in res.screen2]
+    elif init not in INITS:
+        raise ValueError(f"init must be one of {INITS}, got {init!r}")
+    else:
+        pos = _diff_stage(P, seed, hp, iters or 5000, diff_deadline,
+                          on_frame=on_frame, frame_every=frame_every,
+                          init=init, jitter_sigma=jitter_sigma)
 
     sizes = np.asarray(p.sizes, np.float64)
     pos, _, _ = legalize(pos, sizes, p.num_hard, p.width, p.height, seed=seed)
@@ -269,5 +328,6 @@ def place(p: PlacementInput, budget_s: float, seed: int,
 
     return PlaceResult(positions=np.asarray(pos, np.float64),
                        num_hard=p.num_hard, seed=seed,
-                       meta=dict(hp=hp, budget_s=budget_s,
+                       meta=dict(hp=hp, budget_s=budget_s, init=init,
+                                 jitter_sigma=jitter_sigma, corner=corner_cfg,
                                  wall_s=time.monotonic() - t0))

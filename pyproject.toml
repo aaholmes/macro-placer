@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "macro-placer"
-version = "1.2.0"
+version = "1.3.0"
 description = "GPU macro placer: gradient global placement, push-apart legalization, annealed local search"
 readme = "README.md"
 license = { file = "LICENSE" }

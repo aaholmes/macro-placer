@@ -109,6 +109,14 @@ for nm in ibm01 ibm02 ... ibm18; do BUDGET_S=3600 uv run python scripts/final_ho
 ```
 (Requires the challenge repo's `macro_place` package and benchmarks.)
 
+The in-memory entry point `placers.api.place` takes an `init` argument for the
+gradient stage's starting point: `random` (default), `quadratic_b2b` (the
+bound-to-bound quadratic wirelength minimum, `placers/quadratic.py`),
+`quadratic_b2b_jitter` (the same plus seeded noise), or `corner_screen` (a
+quadratic-solve screen over corner and edge assignments of the largest
+macros, `placers/corner_seeds.py`). The measurements behind these options are
+in `notes/quadratic_init/README.md`; `random` remains the default.
+
 ---
 
 ## What remains
